@@ -1,7 +1,12 @@
 import type { ChallengeProgress } from "../core/modes/challengeMode";
+import {
+  normalizeClassicSpeedSettings,
+  type ClassicSpeedSettings,
+} from "../core/modes/classicMode";
 import type { DailyProgress } from "../core/modes/dailyMode";
 
 const HIGH_SCORE_KEY = "multi-cars:classic-high-score:v1";
+const CLASSIC_SPEED_SETTINGS_KEY = "multi-cars:classic-speed-settings:v1";
 const CHALLENGE_PROGRESS_PREFIX = "multi-cars:challenge-progress:v1:";
 const DAILY_PROGRESS_PREFIX = "multi-cars:daily-progress:v1:";
 
@@ -18,6 +23,31 @@ export function saveClassicHighScore(score: number, storage: StorageLike = getBr
   if (score > current) {
     storage.setItem(HIGH_SCORE_KEY, String(score));
   }
+}
+
+export function loadClassicSpeedSettings(
+  storage: StorageLike = getBrowserStorage(),
+): ClassicSpeedSettings {
+  const value = storage.getItem(CLASSIC_SPEED_SETTINGS_KEY);
+
+  if (!value) {
+    return normalizeClassicSpeedSettings();
+  }
+
+  try {
+    return normalizeClassicSpeedSettings(JSON.parse(value));
+  } catch {
+    return normalizeClassicSpeedSettings();
+  }
+}
+
+export function saveClassicSpeedSettings(
+  settings: Partial<ClassicSpeedSettings>,
+  storage: StorageLike = getBrowserStorage(),
+): ClassicSpeedSettings {
+  const normalized = normalizeClassicSpeedSettings(settings);
+  storage.setItem(CLASSIC_SPEED_SETTINGS_KEY, JSON.stringify(normalized));
+  return normalized;
 }
 
 export function loadChallengeProgress(

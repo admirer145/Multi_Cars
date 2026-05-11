@@ -99,6 +99,27 @@ test("opens and closes settings from the menu", async ({ page }) => {
   await expect(page.locator("body")).toHaveAttribute("data-screen", "menu");
 });
 
+test("classic speed settings persist and affect gameplay", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Control Room/ }).click();
+  await page.getByLabel("Minimum level").selectOption("3");
+  await page.getByLabel("Maximum level").selectOption("5");
+  await expect(page.getByLabel("Minimum level")).toHaveValue("3");
+  await expect(page.getByLabel("Maximum level")).toHaveValue("5");
+
+  await page.reload();
+  await page.getByRole("button", { name: /Control Room/ }).click();
+  await expect(page.getByLabel("Minimum level")).toHaveValue("3");
+  await expect(page.getByLabel("Maximum level")).toHaveValue("5");
+
+  await page.getByRole("button").first().click();
+  await page.getByRole("button", { name: /Classic Run/ }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await expect(page.locator("body")).toHaveAttribute("data-speed-level", "3");
+});
+
 test("settings screen can scroll on mobile", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.includes("mobile"), "Mobile scroll coverage.");
 
@@ -156,6 +177,61 @@ test("mobile canvas taps are centered between left and right cars", async ({ pag
   await canvas.click({ position: { x: box.width * 0.75, y: box.height * 0.76 } });
   await expect(page.locator("body")).toHaveAttribute("data-left-lane", "1");
   await expect(page.locator("body")).toHaveAttribute("data-right-lane", "0");
+});
+
+test("mobile supports separate active touches for both cars", async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.includes("mobile"), "Mobile multi-touch coverage.");
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Classic Run/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-game-status", "running");
+
+  const canvas = page.locator("canvas");
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error("Canvas bounding box is unavailable.");
+  }
+
+  const leftTouch = { x: box.x + box.width * 0.25, y: box.y + box.height * 0.76 };
+  const rightTouch = { x: box.x + box.width * 0.75, y: box.y + box.height * 0.76 };
+  const client = await page.context().newCDPSession(page);
+
+  await client.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [
+      {
+        x: Math.round(leftTouch.x),
+        y: Math.round(leftTouch.y),
+        id: 1,
+      },
+    ],
+  });
+  await expect(page.locator("body")).toHaveAttribute("data-left-lane", "1");
+  await expect(page.locator("body")).toHaveAttribute("data-right-lane", "1");
+
+  await client.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [
+      {
+        x: Math.round(leftTouch.x),
+        y: Math.round(leftTouch.y),
+        id: 1,
+      },
+      {
+        x: Math.round(rightTouch.x),
+        y: Math.round(rightTouch.y),
+        id: 2,
+      },
+    ],
+  });
+
+  await expect(page.locator("body")).toHaveAttribute("data-left-lane", "1");
+  await expect(page.locator("body")).toHaveAttribute("data-right-lane", "0");
+
+  await client.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
 });
 
 test("accepts keyboard controls and pause", async ({ page }, testInfo) => {

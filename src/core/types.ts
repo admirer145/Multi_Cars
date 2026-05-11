@@ -71,6 +71,8 @@ export type ModeConfig = {
   spawnIntervalMs: number;
   objectSpeed: number;
   difficulty: number;
+  speedLevelMin?: number;
+  speedLevelMax?: number;
   allowedFamilies?: PatternFamily[];
 };
 

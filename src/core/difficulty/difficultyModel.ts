@@ -3,10 +3,15 @@ import {
   DEFAULT_SPAWN_INTERVAL_MS,
   DEFAULT_TRACK_DURATION_MS,
 } from "../constants";
+import { CLASSIC_MODE_ID, getClassicSpeedLevel } from "../modes/classicMode";
 import type { ModeConfig } from "../types";
 export { createClassicMode } from "../modes/classicMode";
 
 export function getSpeedAtTime(config: ModeConfig, timeMs: number): number {
+  if (config.id === CLASSIC_MODE_ID) {
+    return config.objectSpeed + (getClassicSpeedLevel(timeMs, config) - 1) * 26;
+  }
+
   const level = Math.floor(timeMs / 15_000);
   return config.objectSpeed + level * 26;
 }

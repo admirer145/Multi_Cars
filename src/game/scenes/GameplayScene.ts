@@ -36,6 +36,7 @@ import type { ActiveObjectState, ModeConfig, PatternEvent, RoadSide, SimulationS
 import {
   loadChallengeProgress,
   loadClassicHighScore,
+  loadClassicSpeedSettings,
   loadDailyProgress,
   saveChallengeProgress,
   saveClassicHighScore,
@@ -61,6 +62,7 @@ const LANE_X: Record<RoadSide, [number, number]> = {
   left: [154, 270],
   right: [450, 566],
 };
+const EXTRA_TOUCH_POINTERS = 3;
 
 type GameplaySceneData = {
   mode?: "classic" | "challenge" | "practice" | "daily";
@@ -87,6 +89,7 @@ export class GameplayScene extends Phaser.Scene {
   private runIndex = 0;
   private highScore = 0;
   private lastStatus: SimulationState["status"] = "ready";
+  private lastFrameDeltaMs = 16;
   private hasDispatchedEnd = false;
   private visualCarPose: Record<RoadSide, { frontX: number; rearX: number }> = {
     left: { frontX: LANE_X.left[0], rearX: LANE_X.left[0] },
@@ -100,6 +103,7 @@ export class GameplayScene extends Phaser.Scene {
   create(data: GameplaySceneData = {}): void {
     this.startRun({ ...window.__MULTI_CARS_BOOT__, ...data });
     this.highScore = loadClassicHighScore();
+    this.input.addPointer(EXTRA_TOUCH_POINTERS);
 
     this.graphics = this.add.graphics();
     this.hudText = this.add
@@ -142,6 +146,7 @@ export class GameplayScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const cappedDelta = Math.min(delta, 34);
+    this.lastFrameDeltaMs = cappedDelta;
     const state = this.simulation.step(cappedDelta);
 
     if (
@@ -164,20 +169,7 @@ export class GameplayScene extends Phaser.Scene {
 
   private bindInput(): void {
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.hasDispatchedEnd) {
-        return;
-      }
-
-      const state = this.simulation.getState();
-      if (state.status === "failed" || state.status === "completed") {
-        return;
-      }
-
-      const worldX = pointer.x;
-      this.simulation.applyInput({
-        type: worldX < GAME_WIDTH / 2 ? "TOGGLE_LEFT" : "TOGGLE_RIGHT",
-        atMs: state.timeMs,
-      });
+      this.handlePointerToggle(pointer);
     });
 
     this.input.keyboard?.on("keydown-A", () => this.toggleLeft());
@@ -285,7 +277,7 @@ export class GameplayScene extends Phaser.Scene {
       this.modeConfig = this.dailyRun.config;
       this.pattern = this.dailyRun.pattern;
     } else {
-      this.classicRun = createClassicRun(this.runIndex);
+      this.classicRun = createClassicRun(this.runIndex, loadClassicSpeedSettings());
       this.modeConfig = this.classicRun.config;
       this.pattern = this.classicRun.pattern;
     }
@@ -366,8 +358,10 @@ export class GameplayScene extends Phaser.Scene {
   private drawMovingCar(side: RoadSide, state: SimulationState, color: number): void {
     const targetX = LANE_X[side][state.cars[side].lane];
     const pose = this.visualCarPose[side];
-    const nextFrontX = pose.frontX + (targetX - pose.frontX) * 0.38;
-    const nextRearX = pose.rearX + (targetX - pose.rearX) * 0.18;
+    const frontBlend = 1 - Math.exp(-this.lastFrameDeltaMs / 18);
+    const rearBlend = 1 - Math.exp(-this.lastFrameDeltaMs / 32);
+    const nextFrontX = pose.frontX + (targetX - pose.frontX) * frontBlend;
+    const nextRearX = pose.rearX + (targetX - pose.rearX) * rearBlend;
     pose.frontX = Math.abs(nextFrontX - targetX) < 0.45 ? targetX : nextFrontX;
     pose.rearX = Math.abs(nextRearX - targetX) < 0.45 ? targetX : nextRearX;
 
@@ -585,7 +579,7 @@ export class GameplayScene extends Phaser.Scene {
           ? `Practice ${Math.round(state.completedPercent)}%   Score ${state.score}`
           : this.activeMode === "daily"
             ? `Daily ${Math.round(state.completedPercent)}%   Stars ${calculateDailyStars(state.completedPercent)}/3`
-            : `Score ${state.score}   Best ${this.highScore}   Speed ${getClassicSpeedLevel(state.timeMs)}`,
+            : `Score ${state.score}   Best ${this.highScore}   Speed ${this.getDisplayedSpeedLevel(state)}`,
     );
   }
 
@@ -639,11 +633,37 @@ export class GameplayScene extends Phaser.Scene {
     document.body.dataset.gameStatus = state.status;
     document.body.dataset.gameScore = String(state.score);
     document.body.dataset.gameSeed = this.modeConfig.seed;
-    document.body.dataset.speedLevel = String(getClassicSpeedLevel(state.timeMs));
+    document.body.dataset.speedLevel = String(this.getDisplayedSpeedLevel(state));
     document.body.dataset.failureReason = state.failure?.reason ?? "";
     document.body.dataset.patternFamily = state.failure?.patternFamily ?? "";
     document.body.dataset.leftLane = String(state.cars.left.lane);
     document.body.dataset.rightLane = String(state.cars.right.lane);
+  }
+
+  private handlePointerToggle(pointer: Phaser.Input.Pointer): void {
+    if (this.hasDispatchedEnd) {
+      return;
+    }
+
+    const state = this.simulation.getState();
+    if (state.status === "failed" || state.status === "completed") {
+      return;
+    }
+
+    if (pointer.x < GAME_WIDTH / 2) {
+      this.simulation.applyInput({ type: "TOGGLE_LEFT", atMs: state.timeMs });
+      return;
+    }
+
+    this.simulation.applyInput({ type: "TOGGLE_RIGHT", atMs: state.timeMs });
+  }
+
+  private getDisplayedSpeedLevel(state: SimulationState): number {
+    if (this.activeMode !== "classic") {
+      return 1;
+    }
+
+    return getClassicSpeedLevel(state.timeMs, this.modeConfig);
   }
 
   private goToSummary(state: SimulationState): void {

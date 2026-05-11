@@ -8,6 +8,17 @@ import { generatePattern } from "../patterns/patternGenerator";
 
 export const CLASSIC_MODE_ID = "classic";
 export const CLASSIC_SEED_PREFIX = "classic-v1";
+export const MIN_CLASSIC_SPEED_LEVEL = 1;
+export const MAX_CLASSIC_SPEED_LEVEL = 50;
+export const DEFAULT_CLASSIC_SPEED_SETTINGS = {
+  minLevel: MIN_CLASSIC_SPEED_LEVEL,
+  maxLevel: MAX_CLASSIC_SPEED_LEVEL,
+} as const;
+
+export type ClassicSpeedSettings = {
+  minLevel: number;
+  maxLevel: number;
+};
 
 export type ClassicRun = {
   runIndex: number;
@@ -24,12 +35,14 @@ type ClassicModeOptions = {
   runIndex?: number;
   difficulty?: number;
   durationMs?: number;
+  speedSettings?: Partial<ClassicSpeedSettings>;
 };
 
 export function createClassicMode(options: string | ClassicModeOptions = {}): ModeConfig {
   const resolvedOptions = typeof options === "string" ? { seed: options } : options;
   const runIndex = resolvedOptions.runIndex ?? 0;
   const difficulty = resolvedOptions.difficulty ?? getClassicStartingDifficulty(runIndex);
+  const speedSettings = normalizeClassicSpeedSettings(resolvedOptions.speedSettings);
 
   return {
     id: CLASSIC_MODE_ID,
@@ -40,12 +53,17 @@ export function createClassicMode(options: string | ClassicModeOptions = {}): Mo
     spawnIntervalMs: DEFAULT_SPAWN_INTERVAL_MS,
     objectSpeed: DEFAULT_OBJECT_SPEED,
     difficulty,
+    speedLevelMin: speedSettings.minLevel,
+    speedLevelMax: speedSettings.maxLevel,
     allowedFamilies: getClassicFamiliesForDifficulty(difficulty),
   };
 }
 
-export function createClassicRun(runIndex: number): ClassicRun {
-  const config = createClassicMode({ runIndex });
+export function createClassicRun(
+  runIndex: number,
+  speedSettings?: Partial<ClassicSpeedSettings>,
+): ClassicRun {
+  const config = createClassicMode({ runIndex, speedSettings });
   return {
     runIndex,
     config,
@@ -57,8 +75,12 @@ export function createClassicSeed(runIndex: number): string {
   return `${CLASSIC_SEED_PREFIX}-run-${runIndex}`;
 }
 
-export function getClassicSpeedLevel(timeMs: number): number {
-  return Math.min(9, 1 + Math.floor(timeMs / 15_000));
+export function getClassicSpeedLevel(
+  timeMs: number,
+  speedSettings?: Partial<ClassicSpeedSettings> | Pick<ModeConfig, "speedLevelMin" | "speedLevelMax">,
+): number {
+  const { minLevel, maxLevel } = normalizeClassicSpeedSettings(speedSettings);
+  return Math.min(maxLevel, minLevel + Math.floor(timeMs / 15_000));
 }
 
 export function createClassicRunSummary(
@@ -73,10 +95,28 @@ export function createClassicRunSummary(
     score: state.score,
     bestScore,
     completedPercent: Math.round(state.completedPercent),
-    speedLevel: getClassicSpeedLevel(state.timeMs),
+    speedLevel: getClassicSpeedLevel(state.timeMs, config),
     result: state.status,
     failureReason: state.failure?.reason,
     failedPatternFamily: state.failure?.patternFamily,
+  };
+}
+
+export function normalizeClassicSpeedSettings(
+  speedSettings?: Partial<ClassicSpeedSettings> | Pick<ModeConfig, "speedLevelMin" | "speedLevelMax"> | null,
+): ClassicSpeedSettings {
+  const minLevel = normalizeClassicSpeedLevel(
+    getClassicSpeedSettingValue(speedSettings, "minLevel"),
+    DEFAULT_CLASSIC_SPEED_SETTINGS.minLevel,
+  );
+  const maxLevel = normalizeClassicSpeedLevel(
+    getClassicSpeedSettingValue(speedSettings, "maxLevel"),
+    DEFAULT_CLASSIC_SPEED_SETTINGS.maxLevel,
+  );
+
+  return {
+    minLevel: Math.min(minLevel, maxLevel),
+    maxLevel: Math.max(minLevel, maxLevel),
   };
 }
 
@@ -94,4 +134,32 @@ function getClassicFamiliesForDifficulty(difficulty: number): PatternFamily[] {
   }
 
   return ["focus", "sync", "mirror", "alternating", "delayed", "deceptive", "pressure", "recovery"];
+}
+
+function getClassicSpeedSettingValue(
+  speedSettings: Partial<ClassicSpeedSettings> | Pick<ModeConfig, "speedLevelMin" | "speedLevelMax"> | null | undefined,
+  key: keyof ClassicSpeedSettings,
+): number | undefined {
+  if (!speedSettings) {
+    return undefined;
+  }
+
+  if ("speedLevelMin" in speedSettings || "speedLevelMax" in speedSettings) {
+    return key === "minLevel" ? speedSettings.speedLevelMin : speedSettings.speedLevelMax;
+  }
+
+  const classicSpeedSettings = speedSettings as Partial<ClassicSpeedSettings>;
+  return classicSpeedSettings[key];
+}
+
+function normalizeClassicSpeedLevel(value: number | undefined, fallback: number): number {
+  const normalizedValue = Number(value);
+  if (!Number.isFinite(normalizedValue)) {
+    return fallback;
+  }
+
+  return Math.max(
+    MIN_CLASSIC_SPEED_LEVEL,
+    Math.min(MAX_CLASSIC_SPEED_LEVEL, Math.trunc(normalizedValue)),
+  );
 }

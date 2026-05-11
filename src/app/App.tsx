@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
+import type { ChangeEvent, ReactElement, ReactNode } from "react";
 import Phaser from "phaser";
 import {
   ArrowLeft,
@@ -32,9 +32,20 @@ import {
   type AuthoredTrack,
 } from "../core/patterns/authoredTracks";
 import { createInitialChallengeProgress } from "../core/modes/challengeMode";
+import {
+  MAX_CLASSIC_SPEED_LEVEL,
+  MIN_CLASSIC_SPEED_LEVEL,
+  type ClassicSpeedSettings,
+} from "../core/modes/classicMode";
 import { createDailyRun, createInitialDailyProgress } from "../core/modes/dailyMode";
 import { PRACTICE_DRILLS, type PracticeDrill } from "../core/modes/practiceMode";
-import { loadChallengeProgress, loadClassicHighScore, loadDailyProgress } from "../persistence/storage";
+import {
+  loadChallengeProgress,
+  loadClassicHighScore,
+  loadClassicSpeedSettings,
+  loadDailyProgress,
+  saveClassicSpeedSettings,
+} from "../persistence/storage";
 
 type ChallengeCategory = AuthoredTrack["category"];
 
@@ -47,12 +58,19 @@ const categoryLabels: Record<ChallengeCategory, string> = {
 };
 
 const categoryOrder = Object.keys(categoryLabels) as ChallengeCategory[];
+const SPEED_LEVEL_OPTIONS = Array.from(
+  { length: MAX_CLASSIC_SPEED_LEVEL - MIN_CLASSIC_SPEED_LEVEL + 1 },
+  (_, index) => MIN_CLASSIC_SPEED_LEVEL + index,
+);
 
 export function App(): ReactElement {
   const [screen, setScreen] = useState<AppScreen>("home");
   const [activeRun, setActiveRun] = useState<GameBootConfig | null>(null);
   const [summary, setSummary] = useState<RunEndedDetail | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ChallengeCategory>("focus");
+  const [classicSpeedSettings, setClassicSpeedSettings] = useState<ClassicSpeedSettings>(() =>
+    loadClassicSpeedSettings(),
+  );
 
   useEffect(() => {
     const handleRunEnded = (event: WindowEventMap[typeof RUN_ENDED_EVENT]) => {
@@ -97,6 +115,10 @@ export function App(): ReactElement {
     setScreen("gameplay");
   };
 
+  const handleClassicSpeedSettingsChange = (nextSettings: ClassicSpeedSettings) => {
+    setClassicSpeedSettings(saveClassicSpeedSettings(nextSettings));
+  };
+
   const showGameCanvas = screen === "gameplay" || screen === "summary";
 
   return (
@@ -132,7 +154,13 @@ export function App(): ReactElement {
         />
       ) : null}
 
-      {screen === "settings" ? <SettingsScreen onBack={() => setScreen("home")} /> : null}
+      {screen === "settings" ? (
+        <SettingsScreen
+          onBack={() => setScreen("home")}
+          classicSpeedSettings={classicSpeedSettings}
+          onClassicSpeedSettingsChange={handleClassicSpeedSettingsChange}
+        />
+      ) : null}
 
       {screen === "summary" && summary ? (
         <SummaryOverlay
@@ -342,13 +370,96 @@ function PracticeScreen({
   );
 }
 
-function SettingsScreen({ onBack }: { onBack: () => void }): ReactElement {
+function SettingsScreen({
+  onBack,
+  classicSpeedSettings,
+  onClassicSpeedSettingsChange,
+}: {
+  onBack: () => void;
+  classicSpeedSettings: ClassicSpeedSettings;
+  onClassicSpeedSettingsChange: (settings: ClassicSpeedSettings) => void;
+}): ReactElement {
+  const handleMinLevelChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const minLevel = Number.parseInt(event.target.value, 10);
+    onClassicSpeedSettingsChange({
+      minLevel,
+      maxLevel: Math.max(minLevel, classicSpeedSettings.maxLevel),
+    });
+  };
+
+  const handleMaxLevelChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const maxLevel = Number.parseInt(event.target.value, 10);
+    onClassicSpeedSettingsChange({
+      minLevel: Math.min(classicSpeedSettings.minLevel, maxLevel),
+      maxLevel,
+    });
+  };
+
   return (
     <ScreenShell>
       <section className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-5 px-5 py-7 sm:px-8">
         <TopBar title="Control Room" detail="A scalable settings surface for gameplay, comfort, visuals, audio, and data." onBack={onBack} />
         <div className="grid gap-4 md:grid-cols-2">
-          <SettingsPanel icon={<Gauge />} title="Gameplay" rows={["Input: tap sides / keyboard", "Start speed: normal", "Road density: adaptive"]} />
+          <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyanline text-ink">
+                <Gauge />
+              </span>
+              <h3 className="text-2xl font-black">Gameplay</h3>
+            </div>
+            <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-300">
+              Classic mode climbs one speed level every 15 seconds. Choose where the road starts and where it tops out.
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <label className="rounded-2xl bg-white/6 px-4 py-3">
+                <span className="block text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                  Minimum level
+                </span>
+                <select
+                  aria-label="Minimum level"
+                  value={classicSpeedSettings.minLevel}
+                  onChange={handleMinLevelChange}
+                  className="mt-3 w-full rounded-2xl border border-white/10 bg-ink/80 px-3 py-3 text-base font-black text-slate-50 outline-none transition focus:border-cyanline"
+                >
+                  {SPEED_LEVEL_OPTIONS.map((level) => (
+                    <option key={level} value={level}>
+                      Level {level}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="rounded-2xl bg-white/6 px-4 py-3">
+                <span className="block text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                  Maximum level
+                </span>
+                <select
+                  aria-label="Maximum level"
+                  value={classicSpeedSettings.maxLevel}
+                  onChange={handleMaxLevelChange}
+                  className="mt-3 w-full rounded-2xl border border-white/10 bg-ink/80 px-3 py-3 text-base font-black text-slate-50 outline-none transition focus:border-cyanline"
+                >
+                  {SPEED_LEVEL_OPTIONS.map((level) => (
+                    <option key={level} value={level}>
+                      Level {level}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="mt-4 rounded-2xl border border-cyanline/20 bg-cyanline/8 px-4 py-3 text-sm font-semibold text-slate-200">
+              Classic starts at level {classicSpeedSettings.minLevel}, rises every 15 seconds, and caps at level {classicSpeedSettings.maxLevel}.
+            </div>
+            <div className="mt-4 space-y-3">
+              {["Input: tap sides / keyboard", "Progression: saved locally", "Road density: adaptive"].map(
+                (row) => (
+                  <div key={row} className="rounded-2xl bg-white/6 px-4 py-3 text-sm font-bold text-slate-300">
+                    {row}
+                  </div>
+                ),
+              )}
+            </div>
+          </section>
           <SettingsPanel icon={<Shield />} title="Comfort" rows={["Reduced motion: off", "Contrast: high", "Screen shake: low"]} />
           <SettingsPanel icon={<Headphones />} title="Audio" rows={["Sound effects: on", "Music: off", "Haptics: planned"]} />
           <SettingsPanel icon={<Sparkles />} title="Visuals & Data" rows={["Theme: road based", "Save data: local", "Cloud sync: later"]} />

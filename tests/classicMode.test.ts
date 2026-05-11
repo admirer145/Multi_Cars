@@ -5,9 +5,17 @@ import {
   createClassicRunSummary,
   createClassicSeed,
   getClassicSpeedLevel,
+  normalizeClassicSpeedSettings,
 } from "../src/core/modes/classicMode";
+import { getSpeedAtTime } from "../src/core/difficulty/difficultyModel";
 import { GameSimulation } from "../src/core/rules/simulation";
-import { loadClassicHighScore, saveClassicHighScore, type StorageLike } from "../src/persistence/storage";
+import {
+  loadClassicHighScore,
+  loadClassicSpeedSettings,
+  saveClassicHighScore,
+  saveClassicSpeedSettings,
+  type StorageLike,
+} from "../src/persistence/storage";
 
 describe("classic mode", () => {
   it("creates stable run seeds from run indexes", () => {
@@ -35,6 +43,22 @@ describe("classic mode", () => {
     expect(getClassicSpeedLevel(0)).toBe(1);
     expect(getClassicSpeedLevel(15_000)).toBe(2);
     expect(getClassicSpeedLevel(120_000)).toBe(9);
+  });
+
+  it("uses configurable classic speed bounds", () => {
+    expect(getClassicSpeedLevel(0, { minLevel: 3, maxLevel: 5 })).toBe(3);
+    expect(getClassicSpeedLevel(15_000, { minLevel: 3, maxLevel: 5 })).toBe(4);
+    expect(getClassicSpeedLevel(45_000, { minLevel: 3, maxLevel: 5 })).toBe(5);
+  });
+
+  it("uses the configured minimum speed as the gameplay baseline", () => {
+    const config = createClassicMode({
+      seed: "speed-range",
+      speedSettings: { minLevel: 3, maxLevel: 5 },
+    });
+
+    expect(getSpeedAtTime(config, 0)).toBe(config.objectSpeed + 52);
+    expect(getSpeedAtTime(config, 45_000)).toBe(config.objectSpeed + 104);
   });
 
   it("keeps classic running past the generated pattern window", () => {
@@ -91,6 +115,41 @@ describe("classic high score storage", () => {
     saveClassicHighScore(4, storage);
 
     expect(loadClassicHighScore(storage)).toBe(8);
+  });
+});
+
+describe("classic speed settings", () => {
+  it("normalizes invalid speed ranges", () => {
+    expect(normalizeClassicSpeedSettings({ minLevel: 8, maxLevel: 3 })).toEqual({
+      minLevel: 3,
+      maxLevel: 8,
+    });
+    expect(normalizeClassicSpeedSettings({ minLevel: -2, maxLevel: 14 })).toEqual({
+      minLevel: 1,
+      maxLevel: 9,
+    });
+  });
+
+  it("loads defaults when no settings exist", () => {
+    expect(loadClassicSpeedSettings(createMemoryStorage())).toEqual({
+      minLevel: 1,
+      maxLevel: 9,
+    });
+  });
+
+  it("persists normalized classic speed settings", () => {
+    const storage = createMemoryStorage();
+
+    const saved = saveClassicSpeedSettings({ minLevel: 7, maxLevel: 4 }, storage);
+
+    expect(saved).toEqual({
+      minLevel: 4,
+      maxLevel: 7,
+    });
+    expect(loadClassicSpeedSettings(storage)).toEqual({
+      minLevel: 4,
+      maxLevel: 7,
+    });
   });
 });
 

@@ -265,12 +265,14 @@ Completed:
 - Kept scroll/touch locking only for active gameplay and the summary overlay.
 - Changed the app root to support scrollable content on mobile.
 - Added mobile e2e coverage for scrolling the Settings screen to hidden lower content.
+- Reset stale page scroll when entering gameplay or summary so the fixed-height game starts at the top even if the menu was previously scrolled.
+- Fixed the gameplay canvas and summary overlay to the viewport so active gameplay does not inherit menu scroll position.
 
 Verification:
 
-- `npm run test` passed with 26 tests.
+- `npm run test` passed with 27 tests.
 - `npm run build` passed.
-- `npm run test:e2e` passed with 13 tests and 3 expected project-specific skips.
+- `npm run test:e2e` passed with 16 tests and 6 expected project-specific skips.
 
 ### Summary Replay Keyboard Fix
 
@@ -363,12 +365,12 @@ Before moving to a new milestone:
 
 ## Latest Verification
 
-Last verified after Classic endless and Challenge progress fix:
+Last verified after mobile gameplay viewport scroll fix:
 
 ```text
 npm run test      -> passed, 27 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 15 browser tests, 5 expected project-specific skips
+npm run test:e2e  -> passed, 16 browser tests, 6 expected project-specific skips
 ```
 
 Current local dev URL:

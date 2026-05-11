@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+const SUMMARY_TIMEOUT_MS = 18_000;
+
 test("boots to the React menu instead of active gameplay", async ({ page }) => {
   await page.goto("/");
 
@@ -38,7 +40,7 @@ test("routes Challenge failure to the React summary overlay", async ({ page }) =
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
   await page.getByRole("button", { name: /Focus Road I/ }).click();
 
-  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: 12_000 });
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
   await expect(page.getByRole("button", { name: /Again/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
   await expect(page.locator("canvas")).toBeVisible();
@@ -51,7 +53,7 @@ test("R replays from summary and dismisses the overlay", async ({ page }, testIn
 
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
   await page.getByRole("button", { name: /Focus Road I/ }).click();
-  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: 12_000 });
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
 
   await page.keyboard.press("R");
 
@@ -78,6 +80,31 @@ test("settings screen can scroll on mobile", async ({ page }, testInfo) => {
 
   await page.mouse.wheel(0, 900);
   await expect(page.getByText("Cloud sync: later")).toBeVisible();
+});
+
+test("starting Classic from a scrolled mobile menu resets the gameplay viewport", async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.includes("mobile"), "Mobile scroll-to-gameplay coverage.");
+
+  await page.goto("/");
+
+  await page.evaluate(() => {
+    const spacer = document.createElement("div");
+    spacer.dataset.testid = "scroll-spacer";
+    spacer.style.height = "1200px";
+    document.body.appendChild(spacer);
+    window.scrollTo(0, 500);
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: /Classic Run/ }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBe(0);
+  await expect(page.locator("canvas")).toBeVisible();
 });
 
 test("mobile canvas taps are centered between left and right cars", async ({ page }, testInfo) => {

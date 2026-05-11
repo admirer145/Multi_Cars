@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import Phaser from "phaser";
 import {
@@ -75,8 +75,19 @@ export function App(): ReactElement {
     document.body.dataset.mode = activeRun?.mode ?? summary?.mode ?? "";
   }, [activeRun?.mode, screen, summary?.mode]);
 
+  useLayoutEffect(() => {
+    if (screen !== "gameplay" && screen !== "summary") {
+      return;
+    }
+
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [screen]);
+
   const startRun = (mode: PlayMode, options: Partial<GameBootConfig> = {}) => {
     const run = { mode, ...options };
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     setSummary(null);
     setActiveRun(run);
     setScreen("gameplay");
@@ -138,7 +149,7 @@ function GameCanvas({
   dimmed: boolean;
 }): ReactElement {
   return (
-    <div className={`absolute inset-0 transition-opacity duration-500 ${dimmed ? "opacity-45 blur-[1px]" : ""}`}>
+    <div className={`fixed inset-0 transition-opacity duration-500 ${dimmed ? "opacity-45 blur-[1px]" : ""}`}>
       <PhaserMount bootConfig={bootConfig} />
     </div>
   );
@@ -323,7 +334,7 @@ function SummaryOverlay({
   }, [onMenu, onReplay]);
 
   return (
-    <div className="absolute inset-0 z-20 grid place-items-center bg-ink/55 px-5 backdrop-blur-sm">
+    <div className="fixed inset-0 z-20 grid place-items-center bg-ink/55 px-5 backdrop-blur-sm">
       <section className="w-full max-w-md rounded-[2rem] border border-white/15 bg-panel/92 p-6 text-center shadow-2xl">
         <p className="text-sm font-black uppercase tracking-[0.26em] text-dangerline">
           {summary.result === "completed" ? "Road Cleared" : "Run Ended"}

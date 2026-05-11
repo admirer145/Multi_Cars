@@ -1,6 +1,23 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 const SUMMARY_TIMEOUT_MS = 18_000;
+
+async function primeServiceWorkerCache(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    if (!("serviceWorker" in navigator)) {
+      throw new Error("Service workers are unavailable in this browser.");
+    }
+
+    await navigator.serviceWorker.ready;
+  });
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Multi Cars" })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
+    .toBe(true);
+}
 
 test("boots to the React menu instead of active gameplay", async ({ page }) => {
   await page.goto("/");
@@ -70,6 +87,13 @@ test("routes Challenge failure to the React summary overlay", async ({ page }) =
   await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
   await expect(page.getByRole("button", { name: /Again/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
+  await expect
+    .poll(async () => {
+      const backBox = await page.getByRole("button", { name: "Back" }).boundingBox();
+      const againBox = await page.getByRole("button", { name: /Again/ }).boundingBox();
+      return Boolean(backBox && againBox && backBox.x < againBox.x);
+    })
+    .toBe(true);
   await expect(page.locator("canvas")).toBeVisible();
 });
 
@@ -197,6 +221,25 @@ test("classic speed settings persist and affect gameplay", async ({ page }) => {
 
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
   await expect(page.locator("body")).toHaveAttribute("data-speed-level", "3");
+});
+
+test("reloads the cached app shell offline with local settings intact", async ({ page, context }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Multi Cars" })).toBeVisible();
+  await primeServiceWorkerCache(page);
+
+  await page.getByRole("button", { name: /Control Room/ }).click();
+  await page.getByLabel("Minimum level").selectOption("4");
+  await expect(page.getByLabel("Minimum level")).toHaveValue("4");
+
+  await context.setOffline(true);
+  await page.reload({ waitUntil: "domcontentloaded" });
+
+  await expect(page.getByRole("heading", { name: "Multi Cars" })).toBeVisible();
+  await page.getByRole("button", { name: /Control Room/ }).click();
+  await expect(page.getByLabel("Minimum level")).toHaveValue("4");
+
+  await context.setOffline(false);
 });
 
 test("settings screen can scroll on mobile", async ({ page }, testInfo) => {

@@ -4,11 +4,11 @@ This file tracks where the project currently stands against the implementation p
 
 ## Current Status
 
-Current checkpoint: **Milestone 9 - Replay Last Mistake**
+Current checkpoint: **Milestone 10 - PWA And Offline Hardening**
 
-Status: **Completed Replay Last Mistake**
+Status: **Completed PWA And Offline Hardening**
 
-The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, Daily Challenge has a date-seeded offline route, local achievements/cosmetic skins are in place, Control Room gates optional modifiers, and failed runs can open a local non-interactive replay of the final mistake window.
+The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, Daily Challenge has a date-seeded offline route, local achievements/cosmetic skins are in place, Control Room gates optional modifiers, failed runs can open a local non-interactive replay of the final mistake window, and the app can install/cache its shell for offline reloads after a first visit.
 
 ## Progress Summary
 
@@ -24,7 +24,7 @@ The basic playable version is working, the deterministic pattern foundation is i
 | 7. Daily Challenge | Done | Date-seeded Daily route, local daily progress, home entry, gameplay routing, summary/replay, and tests are in place. |
 | 8. Engagement Layer | Done | Local achievements, cosmetic-only car skins, Garage surface, optional gameplay modifiers, summary unlock callouts, persistence, and tests are in place. |
 | 9. Replay Last Mistake | Done | Rolling replay capture, summary replay action, non-interactive replay overlay, unit tests, and browser coverage are in place. |
-| 10. PWA And Offline Hardening | Not Started | Offline-first architecture planned, PWA not added yet. |
+| 10. PWA And Offline Hardening | Done | Manifest, install metadata, service worker shell caching, local-first offline reload coverage, and docs are in place. |
 | 11. Polish And Device QA | Not Started | Basic e2e viewport tests exist; visual polish and device QA remain. |
 
 ## Completed Checkpoint Details
@@ -415,28 +415,54 @@ Verification:
 - `npm run build` passed.
 - `npm run test:e2e` passed with 33 tests and 7 expected project-specific skips.
 
-## Active Next Checkpoint
-
 ### Milestone 10: PWA And Offline Hardening
 
 Goal:
 
 Make the game installable and more resilient offline while keeping the current local-first architecture.
 
+Completed:
+
+- Added a web app manifest, app metadata, theme color, icon, and mobile install tags.
+- Added a same-origin service worker that precaches the app shell and uses network-first caching with cached fallbacks for offline reloads.
+- Kept progress, settings, achievements, and cosmetic state browser-local through the existing local storage persistence layer.
+- Added browser smoke coverage that primes the service worker, changes a local setting, reloads offline, and verifies the setting remains available.
+- Documented install/offline behavior and limitations in the README.
+
+Known limitations:
+
+- Offline play requires at least one successful online visit first.
+- Save data remains local to the browser profile and is not synced across devices.
+- Fresh uncached routes or assets still require network before they can be served offline.
+
+Verification:
+
+- `npm run test` passed with 67 tests.
+- `npm run build` passed.
+- `npm run test:e2e` passed with 35 tests and 7 expected project-specific skips.
+
+## Active Next Checkpoint
+
+### Milestone 11: Polish And Device QA
+
+Goal:
+
+Polish visuals, motion, audio, responsiveness, and device fit now that the major playable systems are in place.
+
 Required work:
 
-- Add web app manifest and install metadata.
-- Add service worker or Vite PWA setup for offline shell caching.
-- Confirm local storage data survives offline reloads.
-- Add offline smoke coverage where practical.
-- Document install/offline behavior and limitations.
+- Review mobile, tablet, and desktop layouts for overlap, spacing, and readability.
+- Tighten motion, feedback, and gameplay presentation where it improves clarity.
+- Check install/standalone display behavior on supported devices where practical.
+- Keep controls responsive across keyboard, pointer, and touch profiles.
+- Document any device-specific limitations.
 
 Acceptance checklist:
 
-- App can load after the first visit without network.
-- Core game assets are cached for offline play.
-- Local progress and settings remain browser-local.
-- Existing unit, build, and browser smoke tests pass.
+- No overlapping UI text on target viewports.
+- Game is readable on small screens.
+- Input remains responsive.
+- Performance is stable on target devices.
 
 ## Checkpoint Rules
 
@@ -457,12 +483,12 @@ Before moving to a new milestone:
 
 ## Latest Verification
 
-Last verified after Replay Last Mistake milestone:
+Last verified after PWA And Offline Hardening milestone:
 
 ```text
 npm run test      -> passed, 67 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 33 browser tests, 7 expected project-specific skips
+npm run test:e2e  -> passed, 35 browser tests, 7 expected project-specific skips
 ```
 
 Current local dev URL:

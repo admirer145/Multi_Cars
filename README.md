@@ -13,6 +13,7 @@ The current build is a playable prototype with a React/Tailwind app shell and a 
 - Garage is available with local achievements and cosmetic-only car skins.
 - Control Room can opt into power ups and obstacle variety for generated runs; all modifiers are off by default.
 - Failed runs can open a local non-interactive replay of the final mistake window from the summary screen.
+- The app has install metadata and can reload its cached shell offline after a first online visit.
 - The main menu, Challenge selection, Settings, and Run Ended summary are React/Tailwind screens.
 - Phaser owns the active gameplay canvas only.
 - Gameplay supports keyboard, pointer, and mobile touch controls.
@@ -128,9 +129,18 @@ Key files:
 - `src/core/engagement/achievements.ts`: Achievement rules and cosmetic car skin definitions.
 - `src/core/modifiers/gameplayModifiers.ts`: opt-in power-up and obstacle-variety settings.
 - `src/core/replay/replayBuffer.ts`: rolling local replay capture for the final mistake window.
+- `src/app/pwa.ts`: service worker registration for install/offline support.
+- `public/manifest.webmanifest`: web app install metadata.
+- `public/sw.js`: app-shell service worker cache.
 - `src/core/patterns/authoredTracks.ts`: authored Challenge road definitions.
 - `docs/CHECKPOINTS.md`: current implementation status and next checkpoint.
 - `docs/PLANNING_AND_IMPLEMENTATION.md`: full planning and implementation guide.
+
+## Install And Offline
+
+Where supported by the browser, Multi Cars can be installed from the browser install prompt or app menu. After the first successful online visit, the service worker caches the app shell and same-origin game assets so reloads can work offline.
+
+Progress, settings, achievements, selected car skin, Challenge progress, and Daily progress remain local to the current browser profile. There is no cloud sync yet, and a brand-new browser/device still needs one online visit before offline reloads are available.
 
 ## Verification
 
@@ -139,16 +149,16 @@ Latest documented verification:
 ```text
 npm run test      -> passed, 67 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 33 browser tests, 7 expected project-specific skips
+npm run test:e2e  -> passed, 35 browser tests, 7 expected project-specific skips
 ```
 
 ## Next Planned Milestone
 
-The active next checkpoint is PWA And Offline Hardening:
+The active next checkpoint is Polish And Device QA:
 
-- Add install metadata and manifest.
-- Cache the app shell for offline reloads.
-- Keep progress and settings local-first.
-- Document offline behavior and limitations.
+- Review mobile, tablet, and desktop layouts for overlap and readability.
+- Tighten motion, feedback, and gameplay presentation.
+- Confirm controls remain responsive across keyboard, pointer, and touch.
+- Document device-specific limitations.
 
 See `docs/CHECKPOINTS.md` for the live checkpoint tracker.

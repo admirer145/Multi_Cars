@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Multi Cars icon">
+  <rect width="512" height="512" rx="96" fill="#070b12" />
+  <path d="M80 256h352" stroke="#f8fafc" stroke-width="18" stroke-linecap="round" stroke-dasharray="36 34" opacity=".32" />
+  <path d="M256 64v384" stroke="#f8fafc" stroke-width="14" stroke-linecap="round" stroke-dasharray="28 30" opacity=".24" />
+  <rect x="128" y="152" width="88" height="156" rx="28" fill="#22d3ee" />
+  <rect x="296" y="204" width="88" height="156" rx="28" fill="#facc15" />
+  <rect x="144" y="178" width="56" height="42" rx="16" fill="#0f172a" opacity=".9" />
+  <rect x="312" y="230" width="56" height="42" rx="16" fill="#0f172a" opacity=".9" />
+  <circle cx="136" cy="286" r="14" fill="#0f172a" />
+  <circle cx="208" cy="286" r="14" fill="#0f172a" />
+  <circle cx="304" cy="338" r="14" fill="#0f172a" />
+  <circle cx="376" cy="338" r="14" fill="#0f172a" />
+  <circle cx="172" cy="92" r="26" fill="#f87171" />
+  <circle cx="340" cy="420" r="26" fill="#34d399" />
+</svg>

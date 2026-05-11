@@ -857,11 +857,11 @@ function SummaryOverlay({
         ) : null}
 
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <button type="button" onClick={onReplay} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyanline px-4 py-4 font-black text-ink shadow-glow">
-            <RotateCcw size={18} /> Again
-          </button>
           <button type="button" onClick={onBack} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4 font-black text-slate-100">
             {backLabel}
+          </button>
+          <button type="button" onClick={onReplay} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyanline px-4 py-4 font-black text-ink shadow-glow">
+            <RotateCcw size={18} /> Again
           </button>
         </div>
       </section>

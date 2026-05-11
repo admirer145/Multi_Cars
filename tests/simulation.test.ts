@@ -90,4 +90,127 @@ describe("game simulation", () => {
       timeMs: 750,
     });
   });
+
+  it("uses shield charges to survive one obstacle hit", () => {
+    const simulation = new GameSimulation(baseConfig, [
+      createEvent({ id: "shield", kind: "power-up", powerUpId: "shield", required: false }),
+      createEvent({ id: "hazard", timeMs: 2301, kind: "obstacle", required: false }),
+    ]);
+
+    simulation.step(2300);
+    expect(simulation.getState().powerUps.shieldCharges).toBe(1);
+
+    simulation.step(2300);
+    expect(simulation.getState()).toMatchObject({
+      status: "running",
+      powerUps: {
+        shieldCharges: 0,
+      },
+    });
+  });
+
+  it("uses shield charges to survive one fake collectible hit", () => {
+    const simulation = new GameSimulation(baseConfig, [
+      createEvent({ id: "shield", kind: "power-up", powerUpId: "shield", required: false }),
+      createEvent({ id: "fake", timeMs: 2301, kind: "fake-collectible", required: false }),
+    ]);
+
+    simulation.step(2300);
+    simulation.step(2300);
+
+    expect(simulation.getState()).toMatchObject({
+      status: "running",
+      powerUps: {
+        shieldCharges: 0,
+      },
+    });
+  });
+
+  it("doubles collectible score while score multiplier is active", () => {
+    const simulation = new GameSimulation(baseConfig, [
+      createEvent({
+        id: "multiplier",
+        kind: "power-up",
+        powerUpId: "score-multiplier",
+        required: false,
+      }),
+      createEvent({ id: "collectible", timeMs: 2301 }),
+    ]);
+
+    simulation.step(2300);
+    simulation.step(2300);
+
+    expect(simulation.getState().score).toBe(2);
+  });
+
+  it("lets magnet collect required objects from the neighboring lane", () => {
+    const simulation = new GameSimulation(baseConfig, [
+      createEvent({ id: "magnet", kind: "power-up", powerUpId: "magnet", required: false }),
+      createEvent({ id: "collectible", timeMs: 2301, lane: 1 }),
+    ]);
+
+    simulation.step(2300);
+    simulation.step(2300);
+
+    expect(simulation.getState()).toMatchObject({
+      status: "running",
+      score: 1,
+    });
+  });
+
+  it("does not let magnet pull fake collectibles", () => {
+    const simulation = new GameSimulation(baseConfig, [
+      createEvent({ id: "magnet", kind: "power-up", powerUpId: "magnet", required: false }),
+      createEvent({ id: "fake", kind: "fake-collectible", required: false, lane: 1 }),
+    ]);
+
+    simulation.step(2300);
+    const fakeCollectible = simulation.getState().objects.find((object) => object.id === "fake");
+
+    expect(fakeCollectible).toMatchObject({
+      kind: "fake-collectible",
+      collected: false,
+    });
+  });
+
+  it("does not let magnet pull wrong-color color match objects", () => {
+    const simulation = new GameSimulation(baseConfig, [
+      createEvent({ id: "magnet", kind: "power-up", powerUpId: "magnet", required: false }),
+      createEvent({
+        id: "wrong-color",
+        kind: "color-match",
+        required: false,
+        colorKey: "right",
+        lane: 1,
+      }),
+    ]);
+
+    simulation.step(2300);
+    const wrongColor = simulation.getState().objects.find((object) => object.id === "wrong-color");
+
+    expect(wrongColor).toMatchObject({
+      kind: "color-match",
+      collected: false,
+    });
+  });
+
+  it("fails when the car collects a wrong-color color match object", () => {
+    const simulation = new GameSimulation(baseConfig, [
+      createEvent({
+        id: "wrong-color",
+        kind: "color-match",
+        required: false,
+        colorKey: "right",
+      }),
+    ]);
+
+    simulation.step(2300);
+
+    expect(simulation.getState()).toMatchObject({
+      status: "failed",
+      failure: {
+        reason: "hit-obstacle",
+      },
+    });
+  });
 });

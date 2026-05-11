@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChangeEvent, ReactElement, ReactNode } from "react";
 import Phaser from "phaser";
 import {
@@ -6,8 +6,10 @@ import {
   Gauge,
   Headphones,
   CalendarDays,
+  Award,
   Lock,
   Medal,
+  Palette,
   Play,
   RotateCcw,
   Settings,
@@ -27,6 +29,15 @@ import {
   type RunEndedDetail,
 } from "./gameBridge";
 import {
+  ACHIEVEMENTS,
+  CAR_SKINS,
+  getAchievement,
+  isCarSkinUnlocked,
+  updateAchievementsForSummary,
+  type AchievementState,
+  type CarSkinId,
+} from "../core/engagement/achievements";
+import {
   AUTHORED_TRACKS,
   getAuthoredTracksByCategory,
   type AuthoredTrack,
@@ -40,11 +51,25 @@ import {
 import { createDailyRun, createInitialDailyProgress } from "../core/modes/dailyMode";
 import { PRACTICE_DRILLS, type PracticeDrill } from "../core/modes/practiceMode";
 import {
+  OBSTACLE_VARIETY_OPTIONS,
+  POWER_UP_OPTIONS,
+  type GameplayModifierMeta,
+  type GameplayModifierSettings,
+  type ObstacleVarietyId,
+  type PowerUpId,
+} from "../core/modifiers/gameplayModifiers";
+import {
   loadChallengeProgress,
   loadClassicHighScore,
   loadClassicSpeedSettings,
+  loadAchievementState,
   loadDailyProgress,
+  loadGameplayModifierSettings,
+  loadSelectedCarSkin,
+  saveAchievementState,
   saveClassicSpeedSettings,
+  saveGameplayModifierSettings,
+  saveSelectedCarSkin,
 } from "../persistence/storage";
 
 type ChallengeCategory = AuthoredTrack["category"];
@@ -63,24 +88,89 @@ const SPEED_LEVEL_OPTIONS = Array.from(
   (_, index) => MIN_CLASSIC_SPEED_LEVEL + index,
 );
 
+type AppHistoryState = {
+  multiCars: true;
+  screen: AppScreen;
+  activeRun?: GameBootConfig | null;
+};
+
 export function App(): ReactElement {
   const [screen, setScreen] = useState<AppScreen>("home");
   const [activeRun, setActiveRun] = useState<GameBootConfig | null>(null);
   const [summary, setSummary] = useState<RunEndedDetail | null>(null);
+  const activeRunRef = useRef<GameBootConfig | null>(null);
+  const summaryRef = useRef<RunEndedDetail | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ChallengeCategory>("focus");
   const [classicSpeedSettings, setClassicSpeedSettings] = useState<ClassicSpeedSettings>(() =>
     loadClassicSpeedSettings(),
   );
+  const [gameplayModifierSettings, setGameplayModifierSettings] = useState<GameplayModifierSettings>(() =>
+    loadGameplayModifierSettings(),
+  );
+  const [achievementState, setAchievementState] = useState<AchievementState>(() => loadAchievementState());
+  const [selectedCarSkinId, setSelectedCarSkinId] = useState<CarSkinId>(() => loadSelectedCarSkin());
+
+  useEffect(() => {
+    activeRunRef.current = activeRun;
+  }, [activeRun]);
+
+  useEffect(() => {
+    summaryRef.current = summary;
+  }, [summary]);
+
+  useEffect(() => {
+    replaceAppHistoryState("home", null);
+
+    const handlePopState = (event: PopStateEvent) => {
+      const historyState = parseAppHistoryState(event.state);
+      const nextScreen = historyState?.screen ?? "home";
+
+      if (nextScreen === "summary" && !summaryRef.current) {
+        const fallbackScreen = getRunReturnScreen(historyState?.activeRun?.mode ?? activeRunRef.current?.mode ?? "classic");
+        setActiveRun(null);
+        setSummary(null);
+        setScreen(fallbackScreen);
+        replaceAppHistoryState(fallbackScreen, null);
+        return;
+      }
+
+      setScreen(nextScreen);
+
+      if (nextScreen === "gameplay" && historyState?.activeRun) {
+        setActiveRun(historyState.activeRun);
+        setSummary(null);
+        return;
+      }
+
+      if (nextScreen !== "gameplay" && nextScreen !== "summary") {
+        setActiveRun(null);
+      }
+
+      if (nextScreen !== "summary") {
+        setSummary(null);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     const handleRunEnded = (event: WindowEventMap[typeof RUN_ENDED_EVENT]) => {
-      setSummary(event.detail);
+      const currentAchievementState = loadAchievementState();
+      const update = updateAchievementsForSummary(currentAchievementState, event.detail.summary);
+      const savedAchievementState = saveAchievementState(update.state);
+      setAchievementState(savedAchievementState);
+      setSelectedCarSkinId(loadSelectedCarSkin());
+      setSummary({
+        ...event.detail,
+        unlockedAchievementIds: update.newlyUnlockedIds,
+      });
       setScreen("summary");
+      replaceAppHistoryState("summary", activeRunRef.current);
     };
     const handleMenuRequested = () => {
-      setActiveRun(null);
-      setSummary(null);
-      setScreen("home");
+      navigateToStaticScreen("home", { replace: true });
     };
 
     window.addEventListener(RUN_ENDED_EVENT, handleRunEnded);
@@ -107,16 +197,67 @@ export function App(): ReactElement {
     document.body.scrollTop = 0;
   }, [screen]);
 
-  const startRun = (mode: PlayMode, options: Partial<GameBootConfig> = {}) => {
+  const navigateToStaticScreen = (
+    nextScreen: Exclude<AppScreen, "gameplay" | "summary">,
+    options: { replace?: boolean } = {},
+  ) => {
+    setActiveRun(null);
+    setSummary(null);
+    setScreen(nextScreen);
+    if (options.replace) {
+      replaceAppHistoryState(nextScreen, null);
+      return;
+    }
+
+    pushAppHistoryState(nextScreen, null);
+  };
+
+  const goBack = () => {
+    if (window.history.state?.multiCars) {
+      window.history.back();
+      return;
+    }
+
+    navigateToStaticScreen("home", { replace: true });
+  };
+
+  const startRun = (
+    mode: PlayMode,
+    options: Partial<GameBootConfig> = {},
+    historyOptions: { replace?: boolean } = {},
+  ) => {
     const run = { mode, ...options };
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     setSummary(null);
     setActiveRun(run);
     setScreen("gameplay");
+    if (historyOptions.replace) {
+      replaceAppHistoryState("gameplay", run);
+      return;
+    }
+
+    pushAppHistoryState("gameplay", run);
+  };
+
+  const returnFromSummary = () => {
+    if (window.history.state?.multiCars) {
+      window.history.back();
+      return;
+    }
+
+    navigateToStaticScreen(getRunReturnScreen(summary?.mode ?? "classic"), { replace: true });
   };
 
   const handleClassicSpeedSettingsChange = (nextSettings: ClassicSpeedSettings) => {
     setClassicSpeedSettings(saveClassicSpeedSettings(nextSettings));
+  };
+
+  const handleGameplayModifierSettingsChange = (nextSettings: GameplayModifierSettings) => {
+    setGameplayModifierSettings(saveGameplayModifierSettings(nextSettings));
+  };
+
+  const handleCarSkinSelect = (skinId: CarSkinId) => {
+    setSelectedCarSkinId(saveSelectedCarSkin(skinId, achievementState));
   };
 
   const showGameCanvas = screen === "gameplay" || screen === "summary";
@@ -131,10 +272,11 @@ export function App(): ReactElement {
       {screen === "home" ? (
         <HomeScreen
           onClassic={() => startRun("classic", { runIndex: 0 })}
-          onChallenge={() => setScreen("challenge-select")}
-          onPractice={() => setScreen("practice-select")}
+          onChallenge={() => navigateToStaticScreen("challenge-select")}
+          onPractice={() => navigateToStaticScreen("practice-select")}
           onDaily={() => startRun("daily")}
-          onSettings={() => setScreen("settings")}
+          onGarage={() => navigateToStaticScreen("garage")}
+          onSettings={() => navigateToStaticScreen("settings")}
         />
       ) : null}
 
@@ -142,40 +284,51 @@ export function App(): ReactElement {
         <ChallengeScreen
           selectedCategory={selectedCategory}
           onSelectCategory={setSelectedCategory}
-          onBack={() => setScreen("home")}
+          onBack={goBack}
           onStart={(trackId) => startRun("challenge", { trackId })}
         />
       ) : null}
 
       {screen === "practice-select" ? (
         <PracticeScreen
-          onBack={() => setScreen("home")}
+          onBack={goBack}
           onStart={(drillId) => startRun("practice", { drillId })}
+        />
+      ) : null}
+
+      {screen === "garage" ? (
+        <GarageScreen
+          achievementState={achievementState}
+          selectedCarSkinId={selectedCarSkinId}
+          onSelectCarSkin={handleCarSkinSelect}
+          onBack={goBack}
         />
       ) : null}
 
       {screen === "settings" ? (
         <SettingsScreen
-          onBack={() => setScreen("home")}
+          onBack={goBack}
           classicSpeedSettings={classicSpeedSettings}
           onClassicSpeedSettingsChange={handleClassicSpeedSettingsChange}
+          gameplayModifierSettings={gameplayModifierSettings}
+          onGameplayModifierSettingsChange={handleGameplayModifierSettingsChange}
         />
       ) : null}
 
       {screen === "summary" && summary ? (
         <SummaryOverlay
           detail={summary}
-          onMenu={() => {
-            setActiveRun(null);
-            setSummary(null);
-            setScreen("home");
-          }}
+          onBack={returnFromSummary}
           onReplay={() =>
-            startRun(summary.mode, {
-              runIndex: summary.nextRunIndex,
-              trackId: summary.trackId,
-              drillId: summary.drillId,
-            })
+            startRun(
+              summary.mode,
+              {
+                runIndex: summary.nextRunIndex,
+                trackId: summary.trackId,
+                drillId: summary.drillId,
+              },
+              { replace: true },
+            )
           }
         />
       ) : null}
@@ -220,12 +373,14 @@ function HomeScreen({
   onChallenge,
   onPractice,
   onDaily,
+  onGarage,
   onSettings,
 }: {
   onClassic: () => void;
   onChallenge: () => void;
   onPractice: () => void;
   onDaily: () => void;
+  onGarage: () => void;
   onSettings: () => void;
 }): ReactElement {
   const bestScore = loadClassicHighScore();
@@ -281,6 +436,13 @@ function HomeScreen({
               detail="Focused offline drills for one hand, mirrored movement, sync, and rhythm."
               accent="cyan"
               onClick={onPractice}
+            />
+            <ModeButton
+              icon={<Award />}
+              title="Garage"
+              detail="Achievements and cosmetic-only car skins."
+              accent="slate"
+              onClick={onGarage}
             />
             <ModeButton
               icon={<Settings />}
@@ -370,14 +532,121 @@ function PracticeScreen({
   );
 }
 
+function GarageScreen({
+  achievementState,
+  selectedCarSkinId,
+  onSelectCarSkin,
+  onBack,
+}: {
+  achievementState: AchievementState;
+  selectedCarSkinId: CarSkinId;
+  onSelectCarSkin: (skinId: CarSkinId) => void;
+  onBack: () => void;
+}): ReactElement {
+  return (
+    <ScreenShell>
+      <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-5 px-5 py-7 sm:px-8">
+        <TopBar title="Garage" detail="Local achievements and cosmetic-only car skins. Unlocks never change gameplay power." onBack={onBack} />
+
+        <div className="grid gap-5 lg:grid-cols-[1fr_0.9fr]">
+          <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-goldline text-ink">
+                <Award />
+              </span>
+              <h2 className="text-2xl font-black">Achievements</h2>
+            </div>
+            <div className="mt-5 grid gap-3">
+              {ACHIEVEMENTS.map((achievement) => {
+                const unlocked = achievementState.unlockedIds.includes(achievement.id);
+                return (
+                  <div
+                    key={achievement.id}
+                    className={`rounded-2xl border px-4 py-3 ${
+                      unlocked ? "border-goldline/35 bg-goldline/10" : "border-white/10 bg-white/6"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-base font-black">{achievement.title}</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-300">{achievement.description}</p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs font-black ${unlocked ? "bg-goldline text-ink" : "bg-white/10 text-slate-400"}`}>
+                        {unlocked ? "Unlocked" : "Locked"}
+                      </span>
+                    </div>
+                    {achievement.rewardSkinId ? (
+                      <p className="mt-2 text-xs font-black uppercase tracking-[0.18em] text-cyanline">
+                        Reward: {getCarSkinLabel(achievement.rewardSkinId)}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyanline text-ink">
+                <Palette />
+              </span>
+              <h2 className="text-2xl font-black">Car Skins</h2>
+            </div>
+            <div className="mt-5 grid gap-3">
+              {CAR_SKINS.map((skin) => {
+                const unlocked = isCarSkinUnlocked(skin, achievementState);
+                const selected = selectedCarSkinId === skin.id;
+                return (
+                  <button
+                    key={skin.id}
+                    type="button"
+                    disabled={!unlocked}
+                    onClick={() => onSelectCarSkin(skin.id)}
+                    className={`rounded-2xl border p-4 text-left transition ${
+                      selected
+                        ? "border-cyanline bg-cyanline/14 shadow-glow"
+                        : unlocked
+                          ? "border-white/10 bg-white/7 hover:border-cyanline/45"
+                          : "border-white/8 bg-white/[0.04] text-slate-500"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-black">{skin.label}</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-300">{skin.description}</p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <span className="h-7 w-7 rounded-full border border-white/20" style={{ backgroundColor: `#${skin.leftColor.toString(16).padStart(6, "0")}` }} />
+                        <span className="h-7 w-7 rounded-full border border-white/20" style={{ backgroundColor: `#${skin.rightColor.toString(16).padStart(6, "0")}` }} />
+                      </div>
+                    </div>
+                    <p className="mt-3 text-xs font-black uppercase tracking-[0.18em] text-goldline">
+                      {selected ? "Selected" : unlocked ? "Available" : "Locked"}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      </section>
+    </ScreenShell>
+  );
+}
+
 function SettingsScreen({
   onBack,
   classicSpeedSettings,
   onClassicSpeedSettingsChange,
+  gameplayModifierSettings,
+  onGameplayModifierSettingsChange,
 }: {
   onBack: () => void;
   classicSpeedSettings: ClassicSpeedSettings;
   onClassicSpeedSettingsChange: (settings: ClassicSpeedSettings) => void;
+  gameplayModifierSettings: GameplayModifierSettings;
+  onGameplayModifierSettingsChange: (settings: GameplayModifierSettings) => void;
 }): ReactElement {
   const handleMinLevelChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const minLevel = Number.parseInt(event.target.value, 10);
@@ -395,17 +664,37 @@ function SettingsScreen({
     });
   };
 
+  const handlePowerUpToggle = (id: PowerUpId) => {
+    onGameplayModifierSettingsChange({
+      ...gameplayModifierSettings,
+      powerUps: {
+        ...gameplayModifierSettings.powerUps,
+        [id]: !gameplayModifierSettings.powerUps[id],
+      },
+    });
+  };
+
+  const handleObstacleVarietyToggle = (id: ObstacleVarietyId) => {
+    onGameplayModifierSettingsChange({
+      ...gameplayModifierSettings,
+      obstacleVariety: {
+        ...gameplayModifierSettings.obstacleVariety,
+        [id]: !gameplayModifierSettings.obstacleVariety[id],
+      },
+    });
+  };
+
   return (
     <ScreenShell>
       <section className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-5 px-5 py-7 sm:px-8">
-        <TopBar title="Control Room" detail="A scalable settings surface for gameplay, comfort, visuals, audio, and data." onBack={onBack} />
+        <TopBar title="Control Room" detail="Tune the road without changing the pure base game defaults." onBack={onBack} />
         <div className="grid gap-4 md:grid-cols-2">
           <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyanline text-ink">
                 <Gauge />
               </span>
-              <h3 className="text-2xl font-black">Gameplay</h3>
+              <h3 className="text-2xl font-black">Classic Pace</h3>
             </div>
             <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-300">
               Classic mode climbs one speed level every 15 seconds. Choose where the road starts and where it tops out.
@@ -450,16 +739,23 @@ function SettingsScreen({
             <div className="mt-4 rounded-2xl border border-cyanline/20 bg-cyanline/8 px-4 py-3 text-sm font-semibold text-slate-200">
               Classic starts at level {classicSpeedSettings.minLevel}, rises every 15 seconds, and caps at level {classicSpeedSettings.maxLevel}.
             </div>
-            <div className="mt-4 space-y-3">
-              {["Input: tap sides / keyboard", "Progression: saved locally", "Road density: adaptive"].map(
-                (row) => (
-                  <div key={row} className="rounded-2xl bg-white/6 px-4 py-3 text-sm font-bold text-slate-300">
-                    {row}
-                  </div>
-                ),
-              )}
-            </div>
           </section>
+          <ModifierPanel
+            icon={<Shield />}
+            title="Power Ups"
+            detail="Disabled by default. Enabled items can appear in generated runs."
+            options={POWER_UP_OPTIONS}
+            values={gameplayModifierSettings.powerUps}
+            onToggle={(id) => handlePowerUpToggle(id as PowerUpId)}
+          />
+          <ModifierPanel
+            icon={<Target />}
+            title="Obstacle Variety"
+            detail="Add advanced road objects only when you want extra mental load."
+            options={OBSTACLE_VARIETY_OPTIONS}
+            values={gameplayModifierSettings.obstacleVariety}
+            onToggle={(id) => handleObstacleVarietyToggle(id as ObstacleVarietyId)}
+          />
           <SettingsPanel icon={<Shield />} title="Comfort" rows={["Reduced motion: off", "Contrast: high", "Screen shake: low"]} />
           <SettingsPanel icon={<Headphones />} title="Audio" rows={["Sound effects: on", "Music: off", "Haptics: planned"]} />
           <SettingsPanel icon={<Sparkles />} title="Visuals & Data" rows={["Theme: road based", "Save data: local", "Cloud sync: later"]} />
@@ -471,14 +767,15 @@ function SettingsScreen({
 
 function SummaryOverlay({
   detail,
-  onMenu,
+  onBack,
   onReplay,
 }: {
   detail: RunEndedDetail;
-  onMenu: () => void;
+  onBack: () => void;
   onReplay: () => void;
 }): ReactElement {
   const { summary } = detail;
+  const backLabel = summary.modeId === "challenge" || summary.modeId === "practice" ? "Back" : "Menu";
 
   useEffect(() => {
     document.body.dataset.screen = "summary";
@@ -495,13 +792,13 @@ function SummaryOverlay({
 
       if (event.key === "m" || event.key === "M" || event.key === "Escape") {
         event.preventDefault();
-        onMenu();
+        onBack();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onMenu, onReplay]);
+  }, [onBack, onReplay]);
 
   return (
     <div className="fixed inset-0 z-20 grid place-items-center bg-ink/55 px-5 backdrop-blur-sm">
@@ -521,6 +818,23 @@ function SummaryOverlay({
           {summary.failedPatternFamily ? ` - ${summary.failedPatternFamily}` : ""}
         </p>
 
+        {detail.unlockedAchievementIds?.length ? (
+          <div className="mt-5 rounded-2xl border border-goldline/30 bg-goldline/10 px-4 py-3 text-left">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-goldline">Unlocked</p>
+            <div className="mt-2 space-y-1">
+              {detail.unlockedAchievementIds.map((achievementId) => {
+                const achievement = getAchievement(achievementId);
+                return (
+                  <p key={achievementId} className="text-sm font-bold text-slate-100">
+                    {achievement.title}
+                    {achievement.rewardSkinId ? ` - ${getCarSkinLabel(achievement.rewardSkinId)}` : ""}
+                  </p>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-6 grid grid-cols-3 gap-3">
           <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? "Progress" : "Score"} value={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? `${summary.completedPercent}%` : summary.score} />
           <ScoreTile label={summary.modeId === "practice" ? "Score" : summary.modeId === "daily" ? "Best" : "Best"} value={summary.modeId === "challenge" ? `${summary.bestScore}%` : summary.modeId === "practice" ? summary.score : summary.bestScore} />
@@ -531,8 +845,8 @@ function SummaryOverlay({
           <button type="button" onClick={onReplay} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyanline px-4 py-4 font-black text-ink shadow-glow">
             <RotateCcw size={18} /> Again
           </button>
-          <button type="button" onClick={onMenu} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4 font-black text-slate-100">
-            Menu
+          <button type="button" onClick={onBack} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4 font-black text-slate-100">
+            {backLabel}
           </button>
         </div>
       </section>
@@ -670,6 +984,70 @@ function RoadShowcase(): ReactElement {
   );
 }
 
+function ModifierPanel({
+  icon,
+  title,
+  detail,
+  options,
+  values,
+  onToggle,
+}: {
+  icon: ReactElement;
+  title: string;
+  detail: string;
+  options: GameplayModifierMeta[];
+  values: Partial<Record<string, boolean>>;
+  onToggle: (id: string) => void;
+}): ReactElement {
+  const enabledCount = options.filter((option) => values[option.id] === true).length;
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-goldline text-ink">{icon}</span>
+          <div>
+            <h3 className="text-2xl font-black">{title}</h3>
+            <p className="mt-1 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+              {enabledCount}/{options.length} active
+            </p>
+          </div>
+        </div>
+      </div>
+      <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-300">{detail}</p>
+      <div className="mt-5 space-y-3">
+        {options.map((option) => {
+          const enabled = values[option.id] === true;
+
+          return (
+            <label
+              key={option.id}
+              className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition ${
+                enabled
+                  ? "border-cyanline/50 bg-cyanline/12 text-slate-50"
+                  : "border-white/8 bg-white/6 text-slate-300 hover:border-white/16"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={() => onToggle(option.id)}
+                className="mt-1 h-5 w-5 accent-cyanline"
+              />
+              <span>
+                <span className="block text-sm font-black">{option.label}</span>
+                <span className="mt-1 block text-xs font-semibold leading-relaxed text-slate-400">
+                  {option.description}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function SettingsPanel({ icon, title, rows }: { icon: ReactElement; title: string; rows: string[] }): ReactElement {
   return (
     <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
@@ -750,11 +1128,56 @@ function getRunKey(run: GameBootConfig): string {
   return `${run.mode}-${run.trackId ?? run.drillId ?? ""}-${run.runIndex ?? 0}`;
 }
 
+function getRunReturnScreen(mode: PlayMode): Exclude<AppScreen, "gameplay" | "summary"> {
+  if (mode === "challenge") {
+    return "challenge-select";
+  }
+
+  if (mode === "practice") {
+    return "practice-select";
+  }
+
+  return "home";
+}
+
+function pushAppHistoryState(screen: AppScreen, activeRun: GameBootConfig | null): void {
+  window.history.pushState(createAppHistoryState(screen, activeRun), "");
+}
+
+function replaceAppHistoryState(screen: AppScreen, activeRun: GameBootConfig | null): void {
+  window.history.replaceState(createAppHistoryState(screen, activeRun), "");
+}
+
+function createAppHistoryState(screen: AppScreen, activeRun: GameBootConfig | null): AppHistoryState {
+  return {
+    multiCars: true,
+    screen,
+    activeRun,
+  };
+}
+
+function parseAppHistoryState(state: unknown): AppHistoryState | null {
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+
+  const candidate = state as Partial<AppHistoryState>;
+  if (candidate.multiCars !== true || !candidate.screen) {
+    return null;
+  }
+
+  return candidate as AppHistoryState;
+}
+
 function getThemeGlow(theme: AuthoredTrack["roadTheme"] | PracticeDrill["roadTheme"]): string {
   if (theme === "neon") return "bg-cyanline/30";
   if (theme === "storm") return "bg-dangerline/30";
   if (theme === "canyon") return "bg-goldline/30";
   return "bg-sky-300/25";
+}
+
+function getCarSkinLabel(skinId: CarSkinId): string {
+  return CAR_SKINS.find((skin) => skin.id === skinId)?.label ?? skinId;
 }
 
 function formatSkillLabel(skill: PracticeDrill["focus"]): string {

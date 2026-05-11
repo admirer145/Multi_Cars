@@ -69,8 +69,55 @@ test("routes Challenge failure to the React summary overlay", async ({ page }) =
 
   await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
   await expect(page.getByRole("button", { name: /Again/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
   await expect(page.locator("canvas")).toBeVisible();
+});
+
+test("summary Back returns to Challenge road selection", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Challenge Roads/ }).click();
+  await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
+
+  await page.getByRole("button", { name: "Back" }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "challenge-select");
+  await expect(page.locator("canvas")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Challenge Roads" })).toBeVisible();
+});
+
+test("summary Back returns to Practice drill selection", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Practice Drills/ }).click();
+  await page.getByRole("button", { name: /Left Hand Focus/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
+
+  await page.getByRole("button", { name: "Back" }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "practice-select");
+  await expect(page.locator("canvas")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Practice Drills" })).toBeVisible();
+});
+
+test("browser back follows the same route from summary to selection", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Challenge Roads/ }).click();
+  await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
+
+  await page.goBack();
+
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "challenge-select");
+  await expect(page.locator("canvas")).toHaveCount(0);
 });
 
 test("R replays from summary and dismisses the overlay", async ({ page }, testInfo) => {
@@ -97,6 +144,18 @@ test("opens and closes settings from the menu", async ({ page }) => {
   await expect(page.locator("body")).toHaveAttribute("data-screen", "settings");
   await page.getByRole("button").first().click();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "menu");
+});
+
+test("opens Garage with achievements and cosmetic skins", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Garage/ }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "garage");
+  await expect(page.getByRole("heading", { name: "Garage" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Achievements" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Car Skins" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Circuit/ })).toBeVisible();
 });
 
 test("classic speed settings persist and affect gameplay", async ({ page }) => {

@@ -126,14 +126,14 @@ describe("classic speed settings", () => {
     });
     expect(normalizeClassicSpeedSettings({ minLevel: -2, maxLevel: 14 })).toEqual({
       minLevel: 1,
-      maxLevel: 9,
+      maxLevel: 14,
     });
   });
 
   it("loads defaults when no settings exist", () => {
     expect(loadClassicSpeedSettings(createMemoryStorage())).toEqual({
       minLevel: 1,
-      maxLevel: 9,
+      maxLevel: 50,
     });
   });
 

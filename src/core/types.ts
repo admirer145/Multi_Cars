@@ -1,8 +1,20 @@
 import type { LANES, ROAD_SIDES } from "./constants";
+import type {
+  GameplayModifierSettings,
+  PowerUpId,
+} from "./modifiers/gameplayModifiers";
 
 export type RoadSide = (typeof ROAD_SIDES)[number];
 export type LaneIndex = (typeof LANES)[number];
-export type ObjectKind = "collectible" | "obstacle";
+export type ObjectKind =
+  | "collectible"
+  | "obstacle"
+  | "power-up"
+  | "moving-obstacle"
+  | "fake-collectible"
+  | "timed-gate"
+  | "color-match"
+  | "dual-collect";
 export type SkillTag =
   | "focus"
   | "coordination"
@@ -28,11 +40,15 @@ export type PatternEvent = {
   lane: LaneIndex;
   kind: ObjectKind;
   required: boolean;
+  powerUpId?: PowerUpId;
+  dualPairId?: string;
+  colorKey?: RoadSide;
   skillTags: SkillTag[];
   patternFamily: PatternFamily;
 };
 
 export type ActiveObjectState = PatternEvent & {
+  spawnLane?: LaneIndex;
   y: number;
   collected: boolean;
   missed: boolean;
@@ -74,6 +90,14 @@ export type ModeConfig = {
   speedLevelMin?: number;
   speedLevelMax?: number;
   allowedFamilies?: PatternFamily[];
+  modifierSettings?: GameplayModifierSettings;
+};
+
+export type PowerUpEffectState = {
+  shieldCharges: number;
+  slowMotionUntilMs: number;
+  magnetUntilMs: number;
+  scoreMultiplierUntilMs: number;
 };
 
 export type SimulationState = {
@@ -84,6 +108,7 @@ export type SimulationState = {
   status: GameStatus;
   failure?: FailureState;
   completedPercent: number;
+  powerUps: PowerUpEffectState;
 };
 
 export type RunResult = "failed" | "completed" | "running" | "paused" | "ready";

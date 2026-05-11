@@ -4,11 +4,11 @@ This file tracks where the project currently stands against the implementation p
 
 ## Current Status
 
-Current checkpoint: **Milestone 7 - Daily Challenge**
+Current checkpoint: **Milestone 8 - Engagement Layer**
 
-Status: **Completed starter Daily Challenge**
+Status: **Completed starter Engagement Layer with opt-in gameplay modifiers**
 
-The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, and Daily Challenge now has a date-seeded offline route.
+The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, Daily Challenge has a date-seeded offline route, local achievements/cosmetic skins are in place, and Control Room now gates optional power ups plus obstacle variety.
 
 ## Progress Summary
 
@@ -22,7 +22,7 @@ The basic playable version is working, the deterministic pattern foundation is i
 | 5. Challenge Mode | Done | Starter authored Challenge track, progress/stars logic, local progress storage, menu entry, gameplay routing, summary routing, and tests are in place. |
 | 6. Practice Mode | Done | Focused deterministic drills, Practice menu flow, gameplay routing, summary/replay, no progress writes, and tests are in place. |
 | 7. Daily Challenge | Done | Date-seeded Daily route, local daily progress, home entry, gameplay routing, summary/replay, and tests are in place. |
-| 8. Engagement Layer | Not Started | Achievements, cosmetics, themes, and calendar are not implemented. |
+| 8. Engagement Layer | Done | Local achievements, cosmetic-only car skins, Garage surface, optional gameplay modifiers, summary unlock callouts, persistence, and tests are in place. |
 | 9. Replay Last Mistake | Not Started | Planned after core modes stabilize. |
 | 10. PWA And Offline Hardening | Not Started | Offline-first architecture planned, PWA not added yet. |
 | 11. Polish And Device QA | Not Started | Basic e2e viewport tests exist; visual polish and device QA remain. |
@@ -367,29 +367,54 @@ Verification:
 - `npm run build` passed.
 - `npm run test:e2e` passed with 20 tests and 6 expected project-specific skips.
 
-## Active Next Checkpoint
-
 ### Milestone 8: Engagement Layer
 
 Goal:
 
 Add non-advantage rewards and lightweight long-term motivation without diluting the core fail conditions.
 
+Completed:
+
+- Added achievement definitions and deterministic unlock rules for first run, Classic score, Challenge progress, Practice play, and Daily play.
+- Added cosmetic-only car skin definitions gated by achievements.
+- Added local achievement state persistence and selected car skin persistence.
+- Added Garage screen with achievements and car skins.
+- Added summary unlock callouts for newly earned achievements and cosmetic rewards.
+- Applied selected car skin colors to gameplay cars without changing speed, hitboxes, lives, scoring, or fail conditions.
+- Added defaults-off Control Room toggles for shield, slow motion, magnet, score multiplier, dual collect, moving obstacles, fake collectibles, timed gates, and color matching.
+- Added deterministic modifier decoration for generated Classic/Daily roads, plus simulation behavior for active power-up effects and advanced hazard/collectible variants.
+- Added unit tests for achievement unlocks, locked/unlocked skin normalization, and persistence.
+- Added unit tests for modifier defaults, persistence, generated-road decoration, shield, fake-collectible shielding, magnet safety, wrong-color traps, and score multiplier behavior.
+- Added browser coverage for opening the Garage surface on desktop and mobile profiles.
+
+Verification:
+
+- `npm run test` passed with 63 tests.
+- `npm run build` passed.
+- `npm run test:e2e` passed with 31 tests and 7 expected project-specific skips.
+
+## Active Next Checkpoint
+
+### Milestone 9: Replay Last Mistake
+
+Goal:
+
+Add an optional post-run replay of the final mistake window so players can see what they missed without changing the run result.
+
 Required work:
 
-- Add local achievement definitions.
-- Add achievement unlock checks after Classic, Challenge, Practice, and Daily summaries.
-- Add a simple achievements/cosmetics surface in the menu or settings area.
-- Keep rewards cosmetic or informational only.
-- Add local storage for achievement state.
-- Add unit tests for unlock rules and browser coverage for the achievements surface.
+- Capture a short rolling window of simulation state or input events during gameplay.
+- Pass replay metadata to the summary overlay.
+- Add a replay-last-mistake action to the summary screen.
+- Render a non-interactive replay view.
+- Keep replay optional and local only.
+- Add unit tests for replay capture boundaries and browser coverage for opening replay from summary.
 
 Acceptance checklist:
 
-- Achievements unlock from existing run summaries without changing gameplay power.
-- Rewards do not alter speed, hitboxes, lives, or scoring advantage.
-- Achievement state persists locally.
-- Existing modes continue to run without regressions.
+- Replay shows the final few seconds before failure.
+- Replay does not allow input or alter saved progress.
+- Summary still supports normal replay and menu actions.
 - Existing unit, build, and browser smoke tests pass.
 
 ## Checkpoint Rules
@@ -411,12 +436,12 @@ Before moving to a new milestone:
 
 ## Latest Verification
 
-Last verified after Daily Challenge milestone:
+Last verified after Engagement Layer modifier pass:
 
 ```text
-npm run test      -> passed, 39 tests
+npm run test      -> passed, 63 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 20 browser tests, 6 expected project-specific skips
+npm run test:e2e  -> passed, 31 browser tests, 7 expected project-specific skips
 ```
 
 Current local dev URL:

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Gauge,
   Headphones,
+  CalendarDays,
   Lock,
   Medal,
   Play,
@@ -13,6 +14,7 @@ import {
   Shield,
   Sparkles,
   Star,
+  Target,
   Trophy,
 } from "lucide-react";
 import { createGameConfig } from "./gameConfig";
@@ -30,7 +32,9 @@ import {
   type AuthoredTrack,
 } from "../core/patterns/authoredTracks";
 import { createInitialChallengeProgress } from "../core/modes/challengeMode";
-import { loadChallengeProgress, loadClassicHighScore } from "../persistence/storage";
+import { createDailyRun, createInitialDailyProgress } from "../core/modes/dailyMode";
+import { PRACTICE_DRILLS, type PracticeDrill } from "../core/modes/practiceMode";
+import { loadChallengeProgress, loadClassicHighScore, loadDailyProgress } from "../persistence/storage";
 
 type ChallengeCategory = AuthoredTrack["category"];
 
@@ -106,6 +110,8 @@ export function App(): ReactElement {
         <HomeScreen
           onClassic={() => startRun("classic", { runIndex: 0 })}
           onChallenge={() => setScreen("challenge-select")}
+          onPractice={() => setScreen("practice-select")}
+          onDaily={() => startRun("daily")}
           onSettings={() => setScreen("settings")}
         />
       ) : null}
@@ -116,6 +122,13 @@ export function App(): ReactElement {
           onSelectCategory={setSelectedCategory}
           onBack={() => setScreen("home")}
           onStart={(trackId) => startRun("challenge", { trackId })}
+        />
+      ) : null}
+
+      {screen === "practice-select" ? (
+        <PracticeScreen
+          onBack={() => setScreen("home")}
+          onStart={(drillId) => startRun("practice", { drillId })}
         />
       ) : null}
 
@@ -133,6 +146,7 @@ export function App(): ReactElement {
             startRun(summary.mode, {
               runIndex: summary.nextRunIndex,
               trackId: summary.trackId,
+              drillId: summary.drillId,
             })
           }
         />
@@ -176,13 +190,22 @@ function PhaserMount({ bootConfig }: { bootConfig: GameBootConfig }): ReactEleme
 function HomeScreen({
   onClassic,
   onChallenge,
+  onPractice,
+  onDaily,
   onSettings,
 }: {
   onClassic: () => void;
   onChallenge: () => void;
+  onPractice: () => void;
+  onDaily: () => void;
   onSettings: () => void;
 }): ReactElement {
   const bestScore = loadClassicHighScore();
+  const dailyRun = createDailyRun();
+  const dailyProgress = loadDailyProgress(
+    dailyRun.dateKey,
+    createInitialDailyProgress(dailyRun.dateKey),
+  );
 
   return (
     <ScreenShell>
@@ -216,6 +239,20 @@ function HomeScreen({
               detail="Skill categories, locked levels, themed roads, and mastery stars."
               accent="gold"
               onClick={onChallenge}
+            />
+            <ModeButton
+              icon={<CalendarDays />}
+              title="Daily Road"
+              detail={`Today's seeded route. Best ${dailyProgress.bestPercent}% / ${dailyProgress.stars} stars.`}
+              accent="gold"
+              onClick={onDaily}
+            />
+            <ModeButton
+              icon={<Target />}
+              title="Practice Drills"
+              detail="Focused offline drills for one hand, mirrored movement, sync, and rhythm."
+              accent="cyan"
+              onClick={onPractice}
             />
             <ModeButton
               icon={<Settings />}
@@ -283,6 +320,28 @@ function ChallengeScreen({
   );
 }
 
+function PracticeScreen({
+  onBack,
+  onStart,
+}: {
+  onBack: () => void;
+  onStart: (drillId: string) => void;
+}): ReactElement {
+  return (
+    <ScreenShell>
+      <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-5 px-5 py-7 sm:px-8">
+        <TopBar title="Practice Drills" detail="Pick a focused drill. Same fail rules, no high-score or road progress writes." onBack={onBack} />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {PRACTICE_DRILLS.map((drill) => (
+            <PracticeCard key={drill.id} drill={drill} onStart={onStart} />
+          ))}
+        </div>
+      </section>
+    </ScreenShell>
+  );
+}
+
 function SettingsScreen({ onBack }: { onBack: () => void }): ReactElement {
   return (
     <ScreenShell>
@@ -337,7 +396,13 @@ function SummaryOverlay({
     <div className="fixed inset-0 z-20 grid place-items-center bg-ink/55 px-5 backdrop-blur-sm">
       <section className="w-full max-w-md rounded-[2rem] border border-white/15 bg-panel/92 p-6 text-center shadow-2xl">
         <p className="text-sm font-black uppercase tracking-[0.26em] text-dangerline">
-          {summary.result === "completed" ? "Road Cleared" : "Run Ended"}
+          {summary.result === "completed"
+            ? summary.modeId === "practice"
+              ? "Drill Complete"
+              : summary.modeId === "daily"
+                ? "Daily Cleared"
+                : "Road Cleared"
+            : "Run Ended"}
         </p>
         <h2 className="mt-3 text-4xl font-black">{summary.modeLabel}</h2>
         <p className="mt-2 text-slate-300">
@@ -346,9 +411,9 @@ function SummaryOverlay({
         </p>
 
         <div className="mt-6 grid grid-cols-3 gap-3">
-          <ScoreTile label={summary.modeId === "challenge" ? "Progress" : "Score"} value={summary.modeId === "challenge" ? `${summary.completedPercent}%` : summary.score} />
-          <ScoreTile label="Best" value={summary.modeId === "challenge" ? `${summary.bestScore}%` : summary.bestScore} />
-          <ScoreTile label={summary.modeId === "challenge" ? "Stars" : "Speed"} value={summary.modeId === "challenge" ? `${summary.stars ?? 0}/3` : summary.speedLevel} />
+          <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? "Progress" : "Score"} value={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? `${summary.completedPercent}%` : summary.score} />
+          <ScoreTile label={summary.modeId === "practice" ? "Score" : summary.modeId === "daily" ? "Best" : "Best"} value={summary.modeId === "challenge" ? `${summary.bestScore}%` : summary.modeId === "practice" ? summary.score : summary.bestScore} />
+          <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "daily" ? "Stars" : summary.modeId === "practice" ? "Drill" : "Speed"} value={summary.modeId === "challenge" || summary.modeId === "daily" ? `${summary.stars ?? 0}/3` : summary.modeId === "practice" ? "Local" : summary.speedLevel} />
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3">
@@ -440,6 +505,40 @@ function ChallengeCard({
         <span className="inline-flex items-center gap-1 text-goldline">
           <Star size={16} fill="currentColor" /> {progress.stars}/3
         </span>
+      </div>
+    </button>
+  );
+}
+
+function PracticeCard({
+  drill,
+  onStart,
+}: {
+  drill: PracticeDrill;
+  onStart: (drillId: string) => void;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={() => onStart(drill.id)}
+      className="relative overflow-hidden rounded-3xl border border-white/12 bg-panel/85 p-5 text-left text-slate-50 transition hover:-translate-y-0.5 hover:border-cyanline/60"
+    >
+      <div className={`absolute right-4 top-4 h-24 w-24 rounded-full blur-2xl ${getThemeGlow(drill.roadTheme)}`} />
+      <div className="relative flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.24em] text-cyanline">
+            {formatSkillLabel(drill.focus)}
+          </p>
+          <h3 className="mt-2 text-2xl font-black">{drill.label}</h3>
+          <p className="mt-2 max-w-sm text-sm font-semibold leading-relaxed text-slate-300">{drill.description}</p>
+        </div>
+        <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-cyanline text-ink">
+          <Target />
+        </div>
+      </div>
+      <div className="relative mt-5 flex items-center justify-between text-sm font-black">
+        <span>{Math.round(drill.durationMs / 1000)}s drill</span>
+        <span className="text-goldline">No progress save</span>
       </div>
     </button>
   );
@@ -537,14 +636,19 @@ function isTrackLocked(track: AuthoredTrack): boolean {
 }
 
 function getRunKey(run: GameBootConfig): string {
-  return `${run.mode}-${run.trackId ?? ""}-${run.runIndex ?? 0}`;
+  return `${run.mode}-${run.trackId ?? run.drillId ?? ""}-${run.runIndex ?? 0}`;
 }
 
-function getThemeGlow(theme: AuthoredTrack["roadTheme"]): string {
+function getThemeGlow(theme: AuthoredTrack["roadTheme"] | PracticeDrill["roadTheme"]): string {
   if (theme === "neon") return "bg-cyanline/30";
   if (theme === "storm") return "bg-dangerline/30";
   if (theme === "canyon") return "bg-goldline/30";
   return "bg-sky-300/25";
+}
+
+function formatSkillLabel(skill: PracticeDrill["focus"]): string {
+  if (skill === "pattern-recognition") return "Pattern Recognition";
+  return skill.charAt(0).toUpperCase() + skill.slice(1);
 }
 
 function formatFailure(reason: string | undefined): string {

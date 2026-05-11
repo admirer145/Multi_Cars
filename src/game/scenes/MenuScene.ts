@@ -90,7 +90,7 @@ export class MenuScene extends Phaser.Scene {
     );
 
     this.add
-      .text(76, 898, "Practice and Daily unlock after the road system is stable.", {
+      .text(76, 898, "Modes are managed by the React shell.", {
         color: MUTED,
         fontFamily: "Inter, system-ui, sans-serif",
         fontSize: "22px",

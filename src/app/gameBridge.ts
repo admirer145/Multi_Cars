@@ -1,12 +1,13 @@
 import type { RunSummary, SimulationState } from "../core/types";
 
-export type AppScreen = "home" | "challenge-select" | "settings" | "gameplay" | "summary";
-export type PlayMode = "classic" | "challenge";
+export type AppScreen = "home" | "challenge-select" | "practice-select" | "settings" | "gameplay" | "summary";
+export type PlayMode = "classic" | "challenge" | "practice" | "daily";
 
 export type GameBootConfig = {
   mode: PlayMode;
   runIndex?: number;
   trackId?: string;
+  drillId?: string;
 };
 
 export type RunEndedDetail = {
@@ -14,6 +15,7 @@ export type RunEndedDetail = {
   nextRunIndex: number;
   mode: PlayMode;
   trackId?: string;
+  drillId?: string;
   finalState?: SimulationState;
 };
 
@@ -23,6 +25,7 @@ export const MENU_REQUEST_EVENT = "multi-cars:menu-requested";
 declare global {
   interface Window {
     __MULTI_CARS_BOOT__?: GameBootConfig;
+    __MULTI_CARS_TEST_FAIL__?: () => void;
   }
 
   interface WindowEventMap {

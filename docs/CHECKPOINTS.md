@@ -4,11 +4,11 @@ This file tracks where the project currently stands against the implementation p
 
 ## Current Status
 
-Current checkpoint: **Milestone 5 - Challenge Mode**
+Current checkpoint: **Milestone 7 - Daily Challenge**
 
-Status: **Completed starter Challenge mode**
+Status: **Completed starter Daily Challenge**
 
-The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is structured, the app has a stronger menu/summary flow, and Challenge mode now has categorized road selection with level progression.
+The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, and Daily Challenge now has a date-seeded offline route.
 
 ## Progress Summary
 
@@ -20,8 +20,8 @@ The basic playable version is working, the deterministic pattern foundation is i
 | 3. Classic Mode | Done | Stable Classic run factory, deterministic restart seeds, speed level display, clearer failure summary, and mode tests are in place. |
 | 4. Menu And UX Foundation | Done | Menu, Classic start flow, settings entry, pause-to-menu flow, summary scene foundation, and navigation tests are in place. |
 | 5. Challenge Mode | Done | Starter authored Challenge track, progress/stars logic, local progress storage, menu entry, gameplay routing, summary routing, and tests are in place. |
-| 6. Practice Mode | Not Started | Planned next, building on authored pattern drills and challenge progress concepts. |
-| 7. Daily Challenge | Not Started | Daily seed helper exists, but no mode UI or progress tracking yet. |
+| 6. Practice Mode | Done | Focused deterministic drills, Practice menu flow, gameplay routing, summary/replay, no progress writes, and tests are in place. |
+| 7. Daily Challenge | Done | Date-seeded Daily route, local daily progress, home entry, gameplay routing, summary/replay, and tests are in place. |
 | 8. Engagement Layer | Not Started | Achievements, cosmetics, themes, and calendar are not implemented. |
 | 9. Replay Last Mistake | Not Started | Planned after core modes stabilize. |
 | 10. PWA And Offline Hardening | Not Started | Offline-first architecture planned, PWA not added yet. |
@@ -322,28 +322,74 @@ Verification:
 - `npm run build` passed.
 - `npm run test:e2e` passed with 15 tests and 5 expected project-specific skips.
 
-## Active Next Checkpoint
-
 ### Milestone 6: Practice Mode
 
 Goal:
 
 Add low-friction drills that train specific skills without weakening Classic or Challenge rules.
 
+Completed:
+
+- Added `practiceMode` module with five starter drills: left-hand focus, right-hand focus, mirror switches, sync lanes, and alternating rhythm.
+- Built Practice runs from deterministic repeated drill patterns.
+- Added Practice mode to the shared boot config, run-ended bridge, and replay flow.
+- Added Practice entry on the home screen and a dedicated drill selection screen.
+- Wired Practice into Phaser gameplay with drill-specific road themes, HUD progress, finite completion, and normal fail conditions.
+- Kept Practice separate from Classic high score and Challenge progress persistence.
+- Added unit tests for drill definitions, deterministic patterns, validation, one-hand drill scoping, and summaries.
+- Added browser coverage for starting a Practice drill on desktop and mobile profiles.
+- Added a deterministic browser-test failure hook so summary routing tests no longer depend on real-time failure duration.
+
+Verification:
+
+- `npm run test` passed with 32 tests.
+- `npm run build` passed.
+- `npm run test:e2e` passed with 18 tests and 6 expected project-specific skips.
+
+### Milestone 7: Daily Challenge
+
+Goal:
+
+Add a date-seeded finite road that can be played offline and reproduced consistently for a local calendar day.
+
+Completed:
+
+- Added `dailyMode` module with local-date seed integration, deterministic route generation, daily progress updates, stars, and summaries.
+- Added local Daily progress persistence separate from Classic high score, Challenge progress, and Practice drills.
+- Added Daily Road entry on the home screen with today's local best percent and stars.
+- Wired Daily into the shared boot config, gameplay scene, HUD, road theme, summary, replay, and progress save flow.
+- Added unit tests for same-date determinism, different-date routes, stars, progress updates, summaries, and storage.
+- Added browser coverage for starting Daily Road on desktop and mobile profiles.
+
+Verification:
+
+- `npm run test` passed with 39 tests.
+- `npm run build` passed.
+- `npm run test:e2e` passed with 20 tests and 6 expected project-specific skips.
+
+## Active Next Checkpoint
+
+### Milestone 8: Engagement Layer
+
+Goal:
+
+Add non-advantage rewards and lightweight long-term motivation without diluting the core fail conditions.
+
 Required work:
 
-- Add practice mode definitions for left-only, right-only, mirror, sync, and alternating drills.
-- Add Practice entry on the menu.
-- Allow quick restart without affecting Classic high score or Challenge progress.
-- Decide whether Practice failures restart immediately or route through Summary.
-- Add unit tests for drill configs and browser tests for Practice navigation.
+- Add local achievement definitions.
+- Add achievement unlock checks after Classic, Challenge, Practice, and Daily summaries.
+- Add a simple achievements/cosmetics surface in the menu or settings area.
+- Keep rewards cosmetic or informational only.
+- Add local storage for achievement state.
+- Add unit tests for unlock rules and browser coverage for the achievements surface.
 
 Acceptance checklist:
 
-- User can start at least one Practice drill from the menu.
-- Practice uses deterministic authored/generated pattern data.
-- Practice does not write Classic high score or Challenge progress.
-- Original fail conditions remain intact in Classic and Challenge.
+- Achievements unlock from existing run summaries without changing gameplay power.
+- Rewards do not alter speed, hitboxes, lives, or scoring advantage.
+- Achievement state persists locally.
+- Existing modes continue to run without regressions.
 - Existing unit, build, and browser smoke tests pass.
 
 ## Checkpoint Rules
@@ -365,12 +411,12 @@ Before moving to a new milestone:
 
 ## Latest Verification
 
-Last verified after mobile gameplay viewport scroll fix:
+Last verified after Daily Challenge milestone:
 
 ```text
-npm run test      -> passed, 27 tests
+npm run test      -> passed, 39 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 16 browser tests, 6 expected project-specific skips
+npm run test:e2e  -> passed, 20 browser tests, 6 expected project-specific skips
 ```
 
 Current local dev URL:

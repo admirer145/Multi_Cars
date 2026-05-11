@@ -34,11 +34,38 @@ test("starts Challenge from road selection", async ({ page }) => {
   await expect(page.locator("body")).toHaveAttribute("data-game-seed", "challenge-starter-focus-01");
 });
 
+test("starts Practice from drill selection", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Practice Drills/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "practice-select");
+  await page.getByRole("button", { name: /Left Hand Focus/ }).click();
+
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await expect(page.locator("body")).toHaveAttribute("data-mode", "practice");
+  await expect(page.locator("body")).toHaveAttribute("data-game-seed", "practice-left-hand-focus");
+});
+
+test("starts Daily from the menu", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Daily Road/ }).click();
+
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await expect(page.locator("body")).toHaveAttribute("data-mode", "daily");
+  await expect(page.locator("body")).toHaveAttribute("data-game-seed", /daily-\d{4}-\d{2}-\d{2}/);
+});
+
 test("routes Challenge failure to the React summary overlay", async ({ page }) => {
   await page.goto("/");
 
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
   await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+
+  await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
 
   await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
   await expect(page.getByRole("button", { name: /Again/ })).toBeVisible();
@@ -53,6 +80,8 @@ test("R replays from summary and dismisses the overlay", async ({ page }, testIn
 
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
   await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
   await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
 
   await page.keyboard.press("R");

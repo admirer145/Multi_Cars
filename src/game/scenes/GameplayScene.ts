@@ -17,13 +17,29 @@ import {
   type ChallengeRun,
   updateChallengeProgress,
 } from "../../core/modes/challengeMode";
+import {
+  createPracticeRun,
+  createPracticeRunSummary,
+  type PracticeRun,
+} from "../../core/modes/practiceMode";
+import {
+  calculateDailyStars,
+  createDailyRun,
+  createDailyRunSummary,
+  createInitialDailyProgress,
+  type DailyProgress,
+  type DailyRun,
+  updateDailyProgress,
+} from "../../core/modes/dailyMode";
 import { GameSimulation } from "../../core/rules/simulation";
 import type { ActiveObjectState, ModeConfig, PatternEvent, RoadSide, SimulationState } from "../../core/types";
 import {
   loadChallengeProgress,
   loadClassicHighScore,
+  loadDailyProgress,
   saveChallengeProgress,
   saveClassicHighScore,
+  saveDailyProgress,
 } from "../../persistence/storage";
 
 const ROAD_COLOR = 0x242a34;
@@ -47,9 +63,10 @@ const LANE_X: Record<RoadSide, [number, number]> = {
 };
 
 type GameplaySceneData = {
-  mode?: "classic" | "challenge";
+  mode?: "classic" | "challenge" | "practice" | "daily";
   runIndex?: number;
   trackId?: string;
+  drillId?: string;
 };
 
 export class GameplayScene extends Phaser.Scene {
@@ -59,11 +76,14 @@ export class GameplayScene extends Phaser.Scene {
   private helpText!: Phaser.GameObjects.Text;
   private simulation!: GameSimulation;
   private modeConfig!: ModeConfig;
-  private activeMode: "classic" | "challenge" = "classic";
+  private activeMode: "classic" | "challenge" | "practice" | "daily" = "classic";
   private pattern: PatternEvent[] = [];
   private classicRun?: ClassicRun;
   private challengeRun?: ChallengeRun;
+  private practiceRun?: PracticeRun;
+  private dailyRun?: DailyRun;
   private challengeProgress?: ChallengeProgress;
+  private dailyProgress?: DailyProgress;
   private runIndex = 0;
   private highScore = 0;
   private lastStatus: SimulationState["status"] = "ready";
@@ -116,6 +136,7 @@ export class GameplayScene extends Phaser.Scene {
       .setDepth(2);
 
     this.bindInput();
+    this.bindTestControls();
     this.setDomStatus(this.simulation.getState());
   }
 
@@ -173,6 +194,29 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-M", () => this.goToMenu());
   }
 
+  private bindTestControls(): void {
+    window.__MULTI_CARS_TEST_FAIL__ = () => {
+      if (this.hasDispatchedEnd) {
+        return;
+      }
+
+      const state = this.simulation.getState();
+      this.goToSummary({
+        ...state,
+        status: "failed",
+        failure: {
+          reason: "missed-collectible",
+          side: "left",
+          lane: state.cars.left.lane,
+          objectId: "e2e-forced-failure",
+          timeMs: state.timeMs,
+          skillTags: ["focus"],
+          patternFamily: "focus",
+        },
+      });
+    };
+  }
+
   private toggleLeft(): void {
     const state = this.simulation.getState();
     this.simulation.applyInput({ type: "TOGGLE_LEFT", atMs: state.timeMs });
@@ -196,7 +240,11 @@ export class GameplayScene extends Phaser.Scene {
     this.startRun(
       this.activeMode === "challenge"
         ? { mode: "challenge", trackId: this.challengeRun?.track.id }
-        : { mode: "classic", runIndex: this.runIndex + 1 },
+        : this.activeMode === "practice"
+          ? { mode: "practice", drillId: this.practiceRun?.drill.id }
+          : this.activeMode === "daily"
+            ? { mode: "daily" }
+            : { mode: "classic", runIndex: this.runIndex + 1 },
     );
     this.simulation.applyInput({ type: "RESTART", atMs: 0 });
   }
@@ -209,6 +257,13 @@ export class GameplayScene extends Phaser.Scene {
     this.activeMode = data.mode ?? "classic";
     this.runIndex = data.runIndex ?? 0;
 
+    this.classicRun = undefined;
+    this.challengeRun = undefined;
+    this.practiceRun = undefined;
+    this.dailyRun = undefined;
+    this.challengeProgress = undefined;
+    this.dailyProgress = undefined;
+
     if (this.activeMode === "challenge") {
       this.challengeRun = createChallengeRun(data.trackId);
       this.challengeProgress = loadChallengeProgress(
@@ -217,6 +272,18 @@ export class GameplayScene extends Phaser.Scene {
       );
       this.modeConfig = this.challengeRun.config;
       this.pattern = this.challengeRun.pattern;
+    } else if (this.activeMode === "practice") {
+      this.practiceRun = createPracticeRun(data.drillId);
+      this.modeConfig = this.practiceRun.config;
+      this.pattern = this.practiceRun.pattern;
+    } else if (this.activeMode === "daily") {
+      this.dailyRun = createDailyRun();
+      this.dailyProgress = loadDailyProgress(
+        this.dailyRun.dateKey,
+        createInitialDailyProgress(this.dailyRun.dateKey),
+      );
+      this.modeConfig = this.dailyRun.config;
+      this.pattern = this.dailyRun.pattern;
     } else {
       this.classicRun = createClassicRun(this.runIndex);
       this.modeConfig = this.classicRun.config;
@@ -250,7 +317,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private drawRoads(state: SimulationState): void {
-    const theme = this.challengeRun?.track.roadTheme ?? "city";
+    const theme = this.challengeRun?.track.roadTheme ?? this.practiceRun?.drill.roadTheme ?? (this.dailyRun ? "storm" : "city");
     const colors = ROAD_THEME_COLORS[theme];
     this.graphics.fillStyle(0x0b1017, 1);
     this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -514,12 +581,16 @@ export class GameplayScene extends Phaser.Scene {
     this.hudText.setText(
       this.activeMode === "challenge"
         ? `Progress ${Math.round(state.completedPercent)}%   Stars ${calculateChallengeStars(state.completedPercent)}/3`
-        : `Score ${state.score}   Best ${this.highScore}   Speed ${getClassicSpeedLevel(state.timeMs)}`,
+        : this.activeMode === "practice"
+          ? `Practice ${Math.round(state.completedPercent)}%   Score ${state.score}`
+          : this.activeMode === "daily"
+            ? `Daily ${Math.round(state.completedPercent)}%   Stars ${calculateDailyStars(state.completedPercent)}/3`
+            : `Score ${state.score}   Best ${this.highScore}   Speed ${getClassicSpeedLevel(state.timeMs)}`,
     );
   }
 
   private drawHudPanel(state: SimulationState): void {
-    const colors = ROAD_THEME_COLORS[this.challengeRun?.track.roadTheme ?? "city"];
+    const colors = ROAD_THEME_COLORS[this.challengeRun?.track.roadTheme ?? this.practiceRun?.drill.roadTheme ?? (this.dailyRun ? "storm" : "city")];
     this.graphics.fillStyle(0x0b1017, 0.92);
     this.graphics.fillRoundedRect(88, 18, 544, 58, 18);
     this.graphics.lineStyle(2, colors.edge, 0.5);
@@ -528,7 +599,11 @@ export class GameplayScene extends Phaser.Scene {
     const progress =
       this.activeMode === "challenge"
         ? state.completedPercent / 100
-        : Math.min(1, state.timeMs / 120_000);
+        : this.activeMode === "practice"
+          ? state.completedPercent / 100
+          : this.activeMode === "daily"
+            ? state.completedPercent / 100
+            : Math.min(1, state.timeMs / 120_000);
     this.graphics.fillRoundedRect(104, 64, 512 * progress, 4, 3);
   }
 
@@ -586,6 +661,29 @@ export class GameplayScene extends Phaser.Scene {
         nextRunIndex: this.runIndex,
         mode: "challenge",
         trackId: this.challengeRun.track.id,
+        finalState: state,
+      });
+      return;
+    }
+
+    if (this.activeMode === "practice" && this.practiceRun) {
+      emitRunEnded({
+        summary: createPracticeRunSummary(state, this.modeConfig),
+        nextRunIndex: this.runIndex,
+        mode: "practice",
+        drillId: this.practiceRun.drill.id,
+        finalState: state,
+      });
+      return;
+    }
+
+    if (this.activeMode === "daily" && this.dailyRun && this.dailyProgress) {
+      const updatedProgress = updateDailyProgress(this.dailyProgress, state.completedPercent, state.score);
+      saveDailyProgress(updatedProgress);
+      emitRunEnded({
+        summary: createDailyRunSummary(state, this.modeConfig, updatedProgress),
+        nextRunIndex: this.runIndex,
+        mode: "daily",
         finalState: state,
       });
       return;

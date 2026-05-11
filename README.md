@@ -8,6 +8,8 @@ The current build is a playable prototype with a React/Tailwind app shell and a 
 
 - Classic mode is playable as an endless run.
 - Challenge Roads are playable as finite authored tracks with categories, locked levels, progress, and stars.
+- Practice Drills are playable as finite focused drills without high-score or Challenge progress writes.
+- Daily Road is playable as a date-seeded finite route with isolated local progress.
 - The main menu, Challenge selection, Settings, and Run Ended summary are React/Tailwind screens.
 - Phaser owns the active gameplay canvas only.
 - Gameplay supports keyboard, pointer, and mobile touch controls.
@@ -83,6 +85,14 @@ Classic is the endless high-score mode. It uses deterministic seeded pattern gen
 
 Challenge Roads are finite authored tracks organized by skill category and level. Current categories include focus, coordination, recognition, and reaction. Challenge progress stores best percent, stars, completion state, and attempts locally.
 
+### Practice Drills
+
+Practice Drills are finite deterministic routes for specific skills: left-hand focus, right-hand focus, mirror switches, sync lanes, and alternating rhythm. They keep the same fail rules as the main game, but do not write Classic high score or Challenge progress.
+
+### Daily Road
+
+Daily Road is a finite generated route based on the local calendar date. The same date produces the same route offline. Daily best percent, best score, stars, completion, and attempts are stored separately from other modes.
+
 ## Project Structure
 
 ```text
@@ -102,6 +112,8 @@ Key files:
 - `src/core/rules/simulation.ts`: deterministic simulation lifecycle and fail conditions.
 - `src/core/modes/classicMode.ts`: Classic run configuration and summaries.
 - `src/core/modes/challengeMode.ts`: Challenge run configuration, progress, and stars.
+- `src/core/modes/practiceMode.ts`: Practice drill definitions, deterministic runs, and summaries.
+- `src/core/modes/dailyMode.ts`: Daily route generation, progress, stars, and summaries.
 - `src/core/patterns/authoredTracks.ts`: authored Challenge road definitions.
 - `docs/CHECKPOINTS.md`: current implementation status and next checkpoint.
 - `docs/PLANNING_AND_IMPLEMENTATION.md`: full planning and implementation guide.
@@ -111,18 +123,18 @@ Key files:
 Latest documented verification:
 
 ```text
-npm run test      -> passed, 27 tests
+npm run test      -> passed, 39 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 15 browser tests, 5 expected project-specific skips
+npm run test:e2e  -> passed, 20 browser tests, 6 expected project-specific skips
 ```
 
 ## Next Planned Milestone
 
-The active next checkpoint is Practice Mode:
+The active next checkpoint is Engagement Layer:
 
-- Add deterministic skill drills.
-- Add a Practice entry to the menu.
-- Keep Practice separate from Classic high score and Challenge progress.
-- Preserve the same core fail conditions for Classic and Challenge.
+- Add local achievements.
+- Add cosmetic or informational rewards only.
+- Add an achievements/cosmetics surface.
+- Keep rewards separate from gameplay advantage.
 
 See `docs/CHECKPOINTS.md` for the live checkpoint tracker.

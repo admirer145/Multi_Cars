@@ -1,6 +1,7 @@
 import type { RunSummary, SimulationState } from "../core/types";
+import type { AchievementId } from "../core/engagement/achievements";
 
-export type AppScreen = "home" | "challenge-select" | "practice-select" | "settings" | "gameplay" | "summary";
+export type AppScreen = "home" | "challenge-select" | "practice-select" | "garage" | "settings" | "gameplay" | "summary";
 export type PlayMode = "classic" | "challenge" | "practice" | "daily";
 
 export type GameBootConfig = {
@@ -16,6 +17,7 @@ export type RunEndedDetail = {
   mode: PlayMode;
   trackId?: string;
   drillId?: string;
+  unlockedAchievementIds?: AchievementId[];
   finalState?: SimulationState;
 };
 

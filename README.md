@@ -10,6 +10,8 @@ The current build is a playable prototype with a React/Tailwind app shell and a 
 - Challenge Roads are playable as finite authored tracks with categories, locked levels, progress, and stars.
 - Practice Drills are playable as finite focused drills without high-score or Challenge progress writes.
 - Daily Road is playable as a date-seeded finite route with isolated local progress.
+- Garage is available with local achievements and cosmetic-only car skins.
+- Control Room can opt into power ups and obstacle variety for generated runs; all modifiers are off by default.
 - The main menu, Challenge selection, Settings, and Run Ended summary are React/Tailwind screens.
 - Phaser owns the active gameplay canvas only.
 - Gameplay supports keyboard, pointer, and mobile touch controls.
@@ -93,11 +95,19 @@ Practice Drills are finite deterministic routes for specific skills: left-hand f
 
 Daily Road is a finite generated route based on the local calendar date. The same date produces the same route offline. Daily best percent, best score, stars, completion, and attempts are stored separately from other modes.
 
+### Garage
+
+Garage contains local achievements and cosmetic-only car skins. Achievement unlocks can reveal skins, but rewards never change gameplay speed, scoring, hitboxes, lives, or fail conditions.
+
+### Control Room Modifiers
+
+Power ups and advanced obstacle variety are opt-in settings. Enabled power ups can add shield, slow motion, magnet, score multiplier pickups, and dual-collect pairs. Enabled obstacle variety can add moving obstacles, fake collectibles, timed gates, and color-matching objects where wrong colors act as traps.
+
 ## Project Structure
 
 ```text
 src/app/                 React app shell, UI screens, Phaser mount, event bridge
-src/core/                Deterministic game rules, modes, patterns, scoring, types
+src/core/                Deterministic game rules, modes, engagement, patterns, scoring, types
 src/game/scenes/         Phaser gameplay scene and legacy scene files
 src/persistence/         Browser storage helpers
 tests/                   Vitest unit tests
@@ -114,6 +124,8 @@ Key files:
 - `src/core/modes/challengeMode.ts`: Challenge run configuration, progress, and stars.
 - `src/core/modes/practiceMode.ts`: Practice drill definitions, deterministic runs, and summaries.
 - `src/core/modes/dailyMode.ts`: Daily route generation, progress, stars, and summaries.
+- `src/core/engagement/achievements.ts`: Achievement rules and cosmetic car skin definitions.
+- `src/core/modifiers/gameplayModifiers.ts`: opt-in power-up and obstacle-variety settings.
 - `src/core/patterns/authoredTracks.ts`: authored Challenge road definitions.
 - `docs/CHECKPOINTS.md`: current implementation status and next checkpoint.
 - `docs/PLANNING_AND_IMPLEMENTATION.md`: full planning and implementation guide.
@@ -123,18 +135,18 @@ Key files:
 Latest documented verification:
 
 ```text
-npm run test      -> passed, 39 tests
+npm run test      -> passed, 63 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 20 browser tests, 6 expected project-specific skips
+npm run test:e2e  -> passed, 31 browser tests, 7 expected project-specific skips
 ```
 
 ## Next Planned Milestone
 
-The active next checkpoint is Engagement Layer:
+The active next checkpoint is Replay Last Mistake:
 
-- Add local achievements.
-- Add cosmetic or informational rewards only.
-- Add an achievements/cosmetics surface.
-- Keep rewards separate from gameplay advantage.
+- Capture the final few seconds before failure.
+- Add a non-interactive replay view from the summary screen.
+- Keep replay local and optional.
+- Preserve normal summary replay and menu actions.
 
 See `docs/CHECKPOINTS.md` for the live checkpoint tracker.

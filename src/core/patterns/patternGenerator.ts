@@ -1,4 +1,10 @@
 import { LANES, ROAD_SIDES } from "../constants";
+import {
+  getEnabledObstacleVarieties,
+  getEnabledPowerUps,
+  type ObstacleVarietyId,
+  type PowerUpId,
+} from "../modifiers/gameplayModifiers";
 import { createSeededRng, type Rng } from "../rng";
 import type {
   LaneIndex,
@@ -48,8 +54,9 @@ export function generatePattern(config: ModeConfig): PatternEvent[] {
   }
 
   const sortedEvents = events.sort((a, b) => a.timeMs - b.timeMs || a.id.localeCompare(b.id));
-  assertValidPattern(sortedEvents, config);
-  return sortedEvents;
+  const decoratedEvents = decoratePatternWithModifiers(sortedEvents, config);
+  assertValidPattern(decoratedEvents, config);
+  return decoratedEvents;
 }
 
 function chooseFamily(
@@ -202,4 +209,144 @@ function chooseKind(beat: number, rng: Rng, collectibleChance: number): ObjectKi
 
 function invertLane(lane: LaneIndex): LaneIndex {
   return lane === 0 ? 1 : 0;
+}
+
+function decoratePatternWithModifiers(events: PatternEvent[], config: ModeConfig): PatternEvent[] {
+  const enabledPowerUps = getEnabledPowerUps(config.modifierSettings);
+  const enabledPickupPowerUps = enabledPowerUps.filter((id) => id !== "dual-collect");
+  const enabledVarieties = getEnabledObstacleVarieties(config.modifierSettings);
+
+  if (enabledPowerUps.length === 0 && enabledVarieties.length === 0) {
+    return events;
+  }
+
+  const rng = createSeededRng(`${config.id}:${config.seed}:modifiers`);
+  let powerUpIndex = 0;
+  let varietyIndex = 0;
+  const decoratedEvents = events.map((event) => ({ ...event }));
+
+  if (enabledPowerUps.includes("dual-collect")) {
+    applyDualCollectPairs(decoratedEvents);
+  }
+
+  const collectibleVarieties = enabledVarieties.filter((id) =>
+    ["fake-collectibles", "color-match"].includes(id),
+  );
+  const obstacleVarieties = enabledVarieties.filter((id) =>
+    ["moving-obstacles", "timed-gates"].includes(id),
+  );
+
+  for (let index = 0; index < decoratedEvents.length; index += 1) {
+    const event = decoratedEvents[index];
+
+    if (event.kind === "collectible" && enabledPickupPowerUps.length > 0 && index > 5 && rng.next() < 0.075) {
+      const powerUpId = enabledPickupPowerUps[powerUpIndex % enabledPickupPowerUps.length];
+      powerUpIndex += 1;
+      decoratedEvents[index] = createPowerUpEvent(event, powerUpId);
+      continue;
+    }
+
+    if (event.kind === "collectible" && collectibleVarieties.length > 0 && index > 8 && rng.next() < 0.1) {
+      const varietyId = collectibleVarieties[varietyIndex % collectibleVarieties.length];
+      varietyIndex += 1;
+      decoratedEvents[index] = createCollectibleVarietyEvent(event, varietyId, rng);
+      continue;
+    }
+
+    if (event.kind === "obstacle" && obstacleVarieties.length > 0 && rng.next() < 0.45) {
+      const varietyId = obstacleVarieties[varietyIndex % obstacleVarieties.length];
+      varietyIndex += 1;
+      decoratedEvents[index] = createObstacleVarietyEvent(event, varietyId);
+    }
+  }
+
+  return decoratedEvents;
+}
+
+function applyDualCollectPairs(events: PatternEvent[]): void {
+  const eventsByTime = new Map<number, PatternEvent[]>();
+
+  for (const event of events) {
+    if (event.kind !== "collectible") {
+      continue;
+    }
+
+    eventsByTime.set(event.timeMs, [...(eventsByTime.get(event.timeMs) ?? []), event]);
+  }
+
+  let pairIndex = 0;
+  for (const [timeMs, sameTimeEvents] of eventsByTime) {
+    const left = sameTimeEvents.find((event) => event.side === "left");
+    const right = sameTimeEvents.find((event) => event.side === "right");
+
+    if (!left || !right || pairIndex % 3 !== 1) {
+      pairIndex += 1;
+      continue;
+    }
+
+    const pairId = `dual-${timeMs}-${pairIndex}`;
+    left.kind = "dual-collect";
+    left.dualPairId = pairId;
+    right.kind = "dual-collect";
+    right.dualPairId = pairId;
+    pairIndex += 1;
+  }
+}
+
+function createPowerUpEvent(event: PatternEvent, powerUpId: PowerUpId): PatternEvent {
+  return {
+    ...event,
+    kind: "power-up",
+    required: false,
+    powerUpId,
+    dualPairId: undefined,
+    colorKey: undefined,
+  };
+}
+
+function createCollectibleVarietyEvent(
+  event: PatternEvent,
+  varietyId: ObstacleVarietyId,
+  rng: Rng,
+): PatternEvent {
+  if (varietyId === "fake-collectibles") {
+    return {
+      ...event,
+      kind: "fake-collectible",
+      required: false,
+      dualPairId: undefined,
+      colorKey: undefined,
+    };
+  }
+
+  const isMatchingColor = rng.next() < 0.62;
+  return {
+    ...event,
+    kind: "color-match",
+    required: isMatchingColor,
+    colorKey: isMatchingColor ? event.side : invertSide(event.side),
+    dualPairId: undefined,
+  };
+}
+
+function createObstacleVarietyEvent(
+  event: PatternEvent,
+  varietyId: ObstacleVarietyId,
+): PatternEvent {
+  const kindByVariety: Partial<Record<ObstacleVarietyId, ObjectKind>> = {
+    "moving-obstacles": "moving-obstacle",
+    "timed-gates": "timed-gate",
+  };
+
+  return {
+    ...event,
+    kind: kindByVariety[varietyId] ?? "obstacle",
+    required: false,
+    dualPairId: undefined,
+    colorKey: undefined,
+  };
+}
+
+function invertSide(side: RoadSide): RoadSide {
+  return side === "left" ? "right" : "left";
 }

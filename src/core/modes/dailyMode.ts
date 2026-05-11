@@ -1,4 +1,5 @@
 import { DEFAULT_OBJECT_SPEED, DEFAULT_SPAWN_INTERVAL_MS } from "../constants";
+import type { GameplayModifierSettings } from "../modifiers/gameplayModifiers";
 import { generatePattern } from "../patterns/patternGenerator";
 import { createDailySeed } from "../patterns/dailySeed";
 import type { ModeConfig, PatternEvent, PatternFamily, RunSummary, SimulationState } from "../types";
@@ -21,7 +22,7 @@ export type DailyProgress = {
   attempts: number;
 };
 
-export function createDailyMode(date = new Date()): ModeConfig {
+export function createDailyMode(date = new Date(), modifierSettings?: GameplayModifierSettings): ModeConfig {
   const seed = createDailySeed(date);
 
   return {
@@ -33,11 +34,12 @@ export function createDailyMode(date = new Date()): ModeConfig {
     objectSpeed: DEFAULT_OBJECT_SPEED,
     difficulty: getDailyDifficulty(date),
     allowedFamilies: getDailyFamilies(date),
+    modifierSettings,
   };
 }
 
-export function createDailyRun(date = new Date()): DailyRun {
-  const config = createDailyMode(date);
+export function createDailyRun(date = new Date(), modifierSettings?: GameplayModifierSettings): DailyRun {
+  const config = createDailyMode(date, modifierSettings);
 
   return {
     dateKey: config.seed,

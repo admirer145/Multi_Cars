@@ -69,7 +69,7 @@ export function validatePattern(
       });
     }
 
-    if (event.required && event.kind !== "collectible") {
+    if (event.required && !isRequiredCollectibleKind(event.kind)) {
       issues.push({
         code: "invalid-required-kind",
         eventId: event.id,
@@ -141,4 +141,8 @@ export function assertValidPattern(events: PatternEvent[], config: ModeConfig): 
     const summary = issues.map((issue) => `${issue.code}: ${issue.message}`).join("\n");
     throw new Error(`Invalid pattern generated for ${config.id}.\n${summary}`);
   }
+}
+
+function isRequiredCollectibleKind(kind: PatternEvent["kind"]): boolean {
+  return kind === "collectible" || kind === "color-match" || kind === "dual-collect";
 }

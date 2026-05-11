@@ -3,6 +3,7 @@ import {
   DEFAULT_SPAWN_INTERVAL_MS,
   DEFAULT_TRACK_DURATION_MS,
 } from "../constants";
+import type { GameplayModifierSettings } from "../modifiers/gameplayModifiers";
 import type { ModeConfig, PatternEvent, PatternFamily, RunSummary, SimulationState } from "../types";
 import { generatePattern } from "../patterns/patternGenerator";
 
@@ -36,6 +37,7 @@ type ClassicModeOptions = {
   difficulty?: number;
   durationMs?: number;
   speedSettings?: Partial<ClassicSpeedSettings>;
+  modifierSettings?: GameplayModifierSettings;
 };
 
 export function createClassicMode(options: string | ClassicModeOptions = {}): ModeConfig {
@@ -56,14 +58,16 @@ export function createClassicMode(options: string | ClassicModeOptions = {}): Mo
     speedLevelMin: speedSettings.minLevel,
     speedLevelMax: speedSettings.maxLevel,
     allowedFamilies: getClassicFamiliesForDifficulty(difficulty),
+    modifierSettings: resolvedOptions.modifierSettings,
   };
 }
 
 export function createClassicRun(
   runIndex: number,
   speedSettings?: Partial<ClassicSpeedSettings>,
+  modifierSettings?: GameplayModifierSettings,
 ): ClassicRun {
-  const config = createClassicMode({ runIndex, speedSettings });
+  const config = createClassicMode({ runIndex, speedSettings, modifierSettings });
   return {
     runIndex,
     config,

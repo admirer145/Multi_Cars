@@ -38,15 +38,16 @@ import {
   loadClassicHighScore,
   loadClassicSpeedSettings,
   loadDailyProgress,
+  loadGameplayModifierSettings,
+  loadSelectedCarSkin,
   saveChallengeProgress,
   saveClassicHighScore,
   saveDailyProgress,
 } from "../../persistence/storage";
+import { getCarSkin } from "../../core/engagement/achievements";
 
 const ROAD_COLOR = 0x242a34;
 const LANE_COLOR = 0x384151;
-const LEFT_CAR_COLOR = 0x3dd6c6;
-const RIGHT_CAR_COLOR = 0xffd166;
 const COLLECTIBLE_COLOR = 0x6ee7b7;
 const OBSTACLE_COLOR = 0xfb7185;
 const TEXT_COLOR = "#f8fafc";
@@ -91,6 +92,10 @@ export class GameplayScene extends Phaser.Scene {
   private lastStatus: SimulationState["status"] = "ready";
   private lastFrameDeltaMs = 16;
   private hasDispatchedEnd = false;
+  private carColors = {
+    left: 0x3dd6c6,
+    right: 0xffd166,
+  };
   private visualCarPose: Record<RoadSide, { frontX: number; rearX: number }> = {
     left: { frontX: LANE_X.left[0], rearX: LANE_X.left[0] },
     right: { frontX: LANE_X.right[1], rearX: LANE_X.right[1] },
@@ -248,6 +253,11 @@ export class GameplayScene extends Phaser.Scene {
   private startRun(data: GameplaySceneData): void {
     this.activeMode = data.mode ?? "classic";
     this.runIndex = data.runIndex ?? 0;
+    const selectedSkin = getCarSkin(loadSelectedCarSkin());
+    this.carColors = {
+      left: selectedSkin.leftColor,
+      right: selectedSkin.rightColor,
+    };
 
     this.classicRun = undefined;
     this.challengeRun = undefined;
@@ -255,6 +265,7 @@ export class GameplayScene extends Phaser.Scene {
     this.dailyRun = undefined;
     this.challengeProgress = undefined;
     this.dailyProgress = undefined;
+    const modifierSettings = loadGameplayModifierSettings();
 
     if (this.activeMode === "challenge") {
       this.challengeRun = createChallengeRun(data.trackId);
@@ -269,7 +280,7 @@ export class GameplayScene extends Phaser.Scene {
       this.modeConfig = this.practiceRun.config;
       this.pattern = this.practiceRun.pattern;
     } else if (this.activeMode === "daily") {
-      this.dailyRun = createDailyRun();
+      this.dailyRun = createDailyRun(new Date(), modifierSettings);
       this.dailyProgress = loadDailyProgress(
         this.dailyRun.dateKey,
         createInitialDailyProgress(this.dailyRun.dateKey),
@@ -277,7 +288,7 @@ export class GameplayScene extends Phaser.Scene {
       this.modeConfig = this.dailyRun.config;
       this.pattern = this.dailyRun.pattern;
     } else {
-      this.classicRun = createClassicRun(this.runIndex, loadClassicSpeedSettings());
+      this.classicRun = createClassicRun(this.runIndex, loadClassicSpeedSettings(), modifierSettings);
       this.modeConfig = this.classicRun.config;
       this.pattern = this.classicRun.pattern;
     }
@@ -301,7 +312,7 @@ export class GameplayScene extends Phaser.Scene {
   private renderState(state: SimulationState): void {
     this.graphics.clear();
     this.drawRoads(state);
-    this.drawObjects(state.objects);
+    this.drawObjects(state.objects, state.timeMs);
     this.drawCars(state);
     this.drawHudPanel(state);
     this.updateHud(state);
@@ -351,8 +362,8 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private drawCars(state: SimulationState): void {
-    this.drawMovingCar("left", state, LEFT_CAR_COLOR);
-    this.drawMovingCar("right", state, RIGHT_CAR_COLOR);
+    this.drawMovingCar("left", state, this.carColors.left);
+    this.drawMovingCar("right", state, this.carColors.right);
   }
 
   private drawMovingCar(side: RoadSide, state: SimulationState, color: number): void {
@@ -539,7 +550,7 @@ export class GameplayScene extends Phaser.Scene {
     this.drawClosedShape(shinePoints);
   }
 
-  private drawObjects(objects: ActiveObjectState[]): void {
+  private drawObjects(objects: ActiveObjectState[], timeMs: number): void {
     for (const object of objects) {
       if (object.collected) {
         continue;
@@ -550,37 +561,165 @@ export class GameplayScene extends Phaser.Scene {
       }
 
       const x = LANE_X[object.side][object.lane];
-      if (object.kind === "collectible") {
-        this.graphics.fillStyle(0x000000, 0.22);
-        this.graphics.fillEllipse(x, object.y + 30, 64, 16);
-        this.graphics.fillStyle(COLLECTIBLE_COLOR, 1);
-        this.graphics.fillCircle(x, object.y, 28);
-        this.graphics.fillStyle(0xffffff, 0.8);
-        this.graphics.fillCircle(x - 8, object.y - 8, 8);
-        this.graphics.lineStyle(6, 0xffffff, 0.28);
-        this.graphics.strokeCircle(x, object.y, 28);
-      } else {
-        this.graphics.fillStyle(0x000000, 0.25);
-        this.graphics.fillEllipse(x, object.y + 34, 70, 18);
-        this.graphics.fillStyle(OBSTACLE_COLOR, 1);
-        this.graphics.fillRoundedRect(x - 32, object.y - 32, 64, 64, 8);
-        this.graphics.lineStyle(5, 0xffffff, 0.22);
-        this.graphics.lineBetween(x - 18, object.y - 18, x + 18, object.y + 18);
-        this.graphics.lineBetween(x + 18, object.y - 18, x - 18, object.y + 18);
+
+      switch (object.kind) {
+        case "collectible":
+          this.drawCollectibleToken(x, object.y, COLLECTIBLE_COLOR);
+          break;
+        case "color-match":
+          this.drawColorMatchToken(x, object.y, object.colorKey === "right" ? this.carColors.right : this.carColors.left);
+          break;
+        case "dual-collect":
+          this.drawDualCollectToken(x, object.y);
+          break;
+        case "power-up":
+          this.drawPowerUpToken(x, object.y, this.getPowerUpColor(object));
+          break;
+        case "fake-collectible":
+          this.drawFakeCollectibleToken(x, object.y);
+          break;
+        case "moving-obstacle":
+          this.drawObstacleToken(x, object.y, 0xf97316, true);
+          break;
+        case "timed-gate":
+          this.drawTimedGateToken(x, object.y, this.isTimedGateClosed(object, timeMs));
+          break;
+        case "obstacle":
+        default:
+          this.drawObstacleToken(x, object.y, OBSTACLE_COLOR, false);
+          break;
       }
     }
   }
 
+  private drawCollectibleToken(x: number, y: number, color: number): void {
+    this.graphics.fillStyle(0x000000, 0.22);
+    this.graphics.fillEllipse(x, y + 30, 64, 16);
+    this.graphics.fillStyle(color, 1);
+    this.graphics.fillCircle(x, y, 28);
+    this.graphics.fillStyle(0xffffff, 0.8);
+    this.graphics.fillCircle(x - 8, y - 8, 8);
+    this.graphics.lineStyle(6, 0xffffff, 0.28);
+    this.graphics.strokeCircle(x, y, 28);
+  }
+
+  private drawPowerUpToken(x: number, y: number, color: number): void {
+    this.graphics.fillStyle(0x000000, 0.24);
+    this.graphics.fillEllipse(x, y + 32, 68, 16);
+    this.graphics.fillStyle(color, 1);
+    this.graphics.fillCircle(x, y, 29);
+    this.graphics.lineStyle(5, 0xffffff, 0.36);
+    this.graphics.strokeCircle(x, y, 29);
+    this.graphics.fillStyle(0xffffff, 0.9);
+    this.graphics.fillTriangle(x, y - 16, x + 13, y + 6, x - 13, y + 6);
+  }
+
+  private drawObstacleToken(x: number, y: number, color: number, moving: boolean): void {
+    this.graphics.fillStyle(0x000000, 0.25);
+    this.graphics.fillEllipse(x, y + 34, 70, 18);
+    this.graphics.fillStyle(color, 1);
+    this.graphics.fillRoundedRect(x - 32, y - 32, 64, 64, moving ? 22 : 8);
+    this.graphics.lineStyle(5, 0xffffff, 0.22);
+    this.graphics.lineBetween(x - 18, y - 18, x + 18, y + 18);
+    this.graphics.lineBetween(x + 18, y - 18, x - 18, y + 18);
+    if (moving) {
+      this.graphics.lineStyle(4, 0xffffff, 0.38);
+      this.graphics.lineBetween(x - 24, y, x + 24, y);
+    }
+  }
+
+  private drawFakeCollectibleToken(x: number, y: number): void {
+    this.drawCollectibleToken(x, y, 0x34d399);
+    this.graphics.lineStyle(5, 0xfb7185, 0.85);
+    this.graphics.lineBetween(x - 13, y - 13, x + 13, y + 13);
+    this.graphics.lineBetween(x + 13, y - 13, x - 13, y + 13);
+  }
+
+  private drawTimedGateToken(x: number, y: number, closed: boolean): void {
+    const color = closed ? 0xf97316 : 0x38bdf8;
+    this.graphics.fillStyle(0x000000, 0.24);
+    this.graphics.fillEllipse(x, y + 32, 78, 16);
+    this.graphics.lineStyle(7, color, closed ? 0.95 : 0.45);
+    this.graphics.lineBetween(x - 28, y - 30, x - 28, y + 30);
+    this.graphics.lineBetween(x + 28, y - 30, x + 28, y + 30);
+    this.graphics.lineBetween(x - 28, y - 24, x + 28, y - 24);
+    if (closed) {
+      this.graphics.lineBetween(x - 28, y + 24, x + 28, y + 24);
+    }
+  }
+
+  private drawColorMatchToken(x: number, y: number, color: number): void {
+    this.graphics.fillStyle(0x000000, 0.22);
+    this.graphics.fillEllipse(x, y + 30, 64, 16);
+    this.graphics.fillStyle(color, 1);
+    this.graphics.fillTriangle(x, y - 32, x + 32, y, x, y + 32);
+    this.graphics.fillTriangle(x, y - 32, x - 32, y, x, y + 32);
+    this.graphics.lineStyle(5, 0xffffff, 0.3);
+    this.graphics.strokeCircle(x, y, 28);
+  }
+
+  private drawDualCollectToken(x: number, y: number): void {
+    this.drawCollectibleToken(x, y, 0xa7f3d0);
+    this.graphics.lineStyle(4, 0xffd166, 0.85);
+    this.graphics.strokeCircle(x, y, 17);
+  }
+
+  private getPowerUpColor(object: ActiveObjectState): number {
+    switch (object.powerUpId) {
+      case "shield":
+        return 0x38bdf8;
+      case "slow-motion":
+        return 0x818cf8;
+      case "magnet":
+        return 0xf472b6;
+      case "score-multiplier":
+        return 0x22c55e;
+      case "dual-collect":
+        return 0xa7f3d0;
+      default:
+        return 0x8bd3ff;
+    }
+  }
+
+  private isTimedGateClosed(object: ActiveObjectState, timeMs: number): boolean {
+    const elapsedMs = Math.max(0, timeMs - object.timeMs);
+    return Math.floor(elapsedMs / 480) % 2 === 0;
+  }
+
   private updateHud(state: SimulationState): void {
-    this.hudText.setText(
+    const effectText = this.formatPowerUpStatus(state);
+    const baseText =
       this.activeMode === "challenge"
         ? `Progress ${Math.round(state.completedPercent)}%   Stars ${calculateChallengeStars(state.completedPercent)}/3`
         : this.activeMode === "practice"
           ? `Practice ${Math.round(state.completedPercent)}%   Score ${state.score}`
           : this.activeMode === "daily"
             ? `Daily ${Math.round(state.completedPercent)}%   Stars ${calculateDailyStars(state.completedPercent)}/3`
-            : `Score ${state.score}   Best ${this.highScore}   Speed ${this.getDisplayedSpeedLevel(state)}`,
-    );
+            : `Score ${state.score}   Best ${this.highScore}   Speed ${this.getDisplayedSpeedLevel(state)}`;
+
+    this.hudText.setText(effectText ? `${baseText}   ${effectText}` : baseText);
+  }
+
+  private formatPowerUpStatus(state: SimulationState): string {
+    const activeLabels: string[] = [];
+
+    if (state.powerUps.shieldCharges > 0) {
+      activeLabels.push(`Shield ${state.powerUps.shieldCharges}`);
+    }
+
+    if (state.powerUps.slowMotionUntilMs > state.timeMs) {
+      activeLabels.push("Slow");
+    }
+
+    if (state.powerUps.magnetUntilMs > state.timeMs) {
+      activeLabels.push("Magnet");
+    }
+
+    if (state.powerUps.scoreMultiplierUntilMs > state.timeMs) {
+      activeLabels.push("x2");
+    }
+
+    return activeLabels.join("   ");
   }
 
   private drawHudPanel(state: SimulationState): void {
@@ -638,6 +777,8 @@ export class GameplayScene extends Phaser.Scene {
     document.body.dataset.patternFamily = state.failure?.patternFamily ?? "";
     document.body.dataset.leftLane = String(state.cars.left.lane);
     document.body.dataset.rightLane = String(state.cars.right.lane);
+    document.body.dataset.shieldCharges = String(state.powerUps.shieldCharges);
+    document.body.dataset.powerUpStatus = this.formatPowerUpStatus(state);
   }
 
   private handlePointerToggle(pointer: Phaser.Input.Pointer): void {

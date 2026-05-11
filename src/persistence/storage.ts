@@ -11,6 +11,7 @@ import {
   type ClassicSpeedSettings,
 } from "../core/modes/classicMode";
 import type { DailyProgress } from "../core/modes/dailyMode";
+import type { PracticeProgress } from "../core/modes/practiceMode";
 import {
   normalizeGameplayModifierSettings,
   type GameplayModifierSettings,
@@ -24,6 +25,7 @@ const ACHIEVEMENTS_KEY = "multi-cars:achievements:v1";
 const SELECTED_CAR_SKIN_KEY = "multi-cars:selected-car-skin:v1";
 const CHALLENGE_PROGRESS_PREFIX = "multi-cars:challenge-progress:v1:";
 const DAILY_PROGRESS_PREFIX = "multi-cars:daily-progress:v1:";
+const PRACTICE_PROGRESS_PREFIX = "multi-cars:practice-progress:v1:";
 
 export type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
@@ -166,6 +168,35 @@ export function saveDailyProgress(
   storage: StorageLike = getBrowserStorage(),
 ): void {
   storage.setItem(`${DAILY_PROGRESS_PREFIX}${progress.dateKey}`, JSON.stringify(progress));
+}
+
+export function loadPracticeProgress(
+  drillId: string,
+  fallback: PracticeProgress,
+  storage: StorageLike = getBrowserStorage(),
+): PracticeProgress {
+  const value = storage.getItem(`${PRACTICE_PROGRESS_PREFIX}${drillId}`);
+
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return {
+      ...fallback,
+      ...JSON.parse(value),
+      drillId,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+export function savePracticeProgress(
+  progress: PracticeProgress,
+  storage: StorageLike = getBrowserStorage(),
+): void {
+  storage.setItem(`${PRACTICE_PROGRESS_PREFIX}${progress.drillId}`, JSON.stringify(progress));
 }
 
 export function loadAchievementState(

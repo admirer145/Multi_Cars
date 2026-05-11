@@ -24,8 +24,11 @@ import {
 } from "../../core/modes/challengeMode";
 import {
   createPracticeRun,
+  createInitialPracticeProgress,
   createPracticeRunSummary,
   type PracticeRun,
+  type PracticeProgress,
+  updatePracticeProgress,
 } from "../../core/modes/practiceMode";
 import {
   calculateDailyStars,
@@ -46,11 +49,13 @@ import {
   loadClassicSpeedSettings,
   loadDailyProgress,
   loadGameplayModifierSettings,
+  loadPracticeProgress,
   loadSelectedCarSkin,
   saveChallengeProgress,
   saveClassicHighScore,
   saveClassicHighScoreForCarCount,
   saveDailyProgress,
+  savePracticeProgress,
 } from "../../persistence/storage";
 import { getCarSkin } from "../../core/engagement/achievements";
 
@@ -101,6 +106,7 @@ export class GameplayScene extends Phaser.Scene {
   private dailyRun?: DailyRun;
   private challengeProgress?: ChallengeProgress;
   private dailyProgress?: DailyProgress;
+  private practiceProgress?: PracticeProgress;
   private runIndex = 0;
   private carCount: SupportedClassicCarCount = 2;
   private highScore = 0;
@@ -299,6 +305,7 @@ export class GameplayScene extends Phaser.Scene {
     this.dailyRun = undefined;
     this.challengeProgress = undefined;
     this.dailyProgress = undefined;
+    this.practiceProgress = undefined;
     this.replayBuffer.reset();
     const modifierSettings = loadGameplayModifierSettings();
 
@@ -312,6 +319,10 @@ export class GameplayScene extends Phaser.Scene {
       this.pattern = this.challengeRun.pattern;
     } else if (this.activeMode === "practice") {
       this.practiceRun = createPracticeRun(data.drillId);
+      this.practiceProgress = loadPracticeProgress(
+        this.practiceRun.drill.id,
+        createInitialPracticeProgress(this.practiceRun.drill.id),
+      );
       this.modeConfig = this.practiceRun.config;
       this.pattern = this.practiceRun.pattern;
     } else if (this.activeMode === "daily") {
@@ -976,9 +987,11 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    if (this.activeMode === "practice" && this.practiceRun) {
+    if (this.activeMode === "practice" && this.practiceRun && this.practiceProgress) {
+      const updatedProgress = updatePracticeProgress(this.practiceProgress, state.completedPercent, state.score);
+      savePracticeProgress(updatedProgress);
       emitRunEnded({
-        summary: createPracticeRunSummary(state, this.modeConfig),
+        summary: createPracticeRunSummary(state, this.modeConfig, updatedProgress),
         nextRunIndex: this.runIndex,
         mode: "practice",
         drillId: this.practiceRun.drill.id,

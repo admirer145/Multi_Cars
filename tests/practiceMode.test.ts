@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  createInitialPracticeProgress,
   createPracticeRun,
   createPracticeRunSummary,
   PRACTICE_DRILLS,
+  updatePracticeProgress,
 } from "../src/core/modes/practiceMode";
 import { validatePattern } from "../src/core/patterns/patternValidation";
 import { GameSimulation } from "../src/core/rules/simulation";
+import { loadPracticeProgress, savePracticeProgress, type StorageLike } from "../src/persistence/storage";
 
 describe("practice mode", () => {
   it("defines the starter drill set", () => {
@@ -45,18 +48,66 @@ describe("practice mode", () => {
     expect(new Set(right.pattern.map((event) => event.side))).toEqual(new Set(["right"]));
   });
 
-  it("summarizes practice runs without persistent best score", () => {
+  it("updates practice progress with best percent, best score, completion, and attempts", () => {
+    const initial = createInitialPracticeProgress("left-hand-focus");
+    const first = updatePracticeProgress(initial, 72, 8);
+    const second = updatePracticeProgress(first, 40, 12);
+
+    expect(second).toMatchObject({
+      drillId: "left-hand-focus",
+      bestPercent: 72,
+      bestScore: 12,
+      completed: false,
+      attempts: 2,
+    });
+
+    expect(updatePracticeProgress(second, 100, 10)).toMatchObject({
+      bestPercent: 100,
+      bestScore: 12,
+      completed: true,
+      attempts: 3,
+    });
+  });
+
+  it("summarizes practice runs with saved best progress", () => {
     const run = createPracticeRun("left-hand-focus");
     const simulation = new GameSimulation(run.config, run.pattern);
+    const progress = updatePracticeProgress(createInitialPracticeProgress(run.drill.id), 82, 11);
 
     simulation.step(1200);
-    const summary = createPracticeRunSummary(simulation.getState(), run.config);
+    const summary = createPracticeRunSummary(simulation.getState(), run.config, progress);
 
     expect(summary).toMatchObject({
       modeId: "practice",
       modeLabel: "Left Hand Focus",
       seed: "practice-left-hand-focus",
-      bestScore: 0,
+      bestScore: 82,
     });
   });
+
+  it("persists practice progress per drill", () => {
+    const storage = createMemoryStorage();
+    const progress = updatePracticeProgress(createInitialPracticeProgress("left-hand-focus"), 75, 9);
+
+    savePracticeProgress(progress, storage);
+
+    expect(loadPracticeProgress("left-hand-focus", createInitialPracticeProgress("left-hand-focus"), storage))
+      .toMatchObject({
+        drillId: "left-hand-focus",
+        bestPercent: 75,
+        bestScore: 9,
+        attempts: 1,
+      });
+  });
 });
+
+function createMemoryStorage(): StorageLike {
+  const values = new Map<string, string>();
+
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+  };
+}

@@ -52,9 +52,9 @@ describe("classic mode", () => {
   });
 
   it("uses a predictable speed level curve", () => {
-    expect(getClassicSpeedLevel(0)).toBe(1);
-    expect(getClassicSpeedLevel(15_000)).toBe(2);
-    expect(getClassicSpeedLevel(120_000)).toBe(9);
+    expect(getClassicSpeedLevel(0)).toBe(5);
+    expect(getClassicSpeedLevel(15_000)).toBe(6);
+    expect(getClassicSpeedLevel(120_000)).toBe(13);
   });
 
   it("uses configurable classic speed bounds", () => {
@@ -144,8 +144,8 @@ describe("classic speed settings", () => {
 
   it("loads defaults when no settings exist", () => {
     expect(loadClassicSpeedSettings(createMemoryStorage())).toEqual({
-      minLevel: 1,
-      maxLevel: 50,
+      minLevel: 5,
+      maxLevel: 20,
     });
   });
 

@@ -80,7 +80,10 @@ export const POWER_UP_DURATION_MS: Record<Exclude<PowerUpId, "shield" | "dual-co
 };
 
 export const DEFAULT_GAMEPLAY_MODIFIER_SETTINGS: GameplayModifierSettings = {
-  powerUps: createDisabledRecord(POWER_UP_OPTIONS.map((option) => option.id as PowerUpId)),
+  powerUps: {
+    ...createDisabledRecord(POWER_UP_OPTIONS.map((option) => option.id as PowerUpId)),
+    shield: true,
+  },
   obstacleVariety: createDisabledRecord(
     OBSTACLE_VARIETY_OPTIONS.map((option) => option.id as ObstacleVarietyId),
   ),
@@ -135,7 +138,7 @@ function normalizeBooleanRecord<Key extends string>(
   return (Object.keys(defaults) as Key[]).reduce(
     (record, key) => ({
       ...record,
-      [key]: value?.[key] === true,
+      [key]: value?.[key] ?? defaults[key],
     }),
     {} as Record<Key, boolean>,
   );

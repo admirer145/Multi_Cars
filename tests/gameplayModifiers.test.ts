@@ -12,10 +12,10 @@ import {
 } from "../src/persistence/storage";
 
 describe("gameplay modifiers", () => {
-  it("keeps all modifiers disabled by default", () => {
+  it("enables shield only by default", () => {
     const settings = normalizeGameplayModifierSettings();
 
-    expect(getEnabledPowerUps(settings)).toEqual([]);
+    expect(getEnabledPowerUps(settings)).toEqual(["shield"]);
     expect(getEnabledObstacleVarieties(settings)).toEqual([]);
   });
 
@@ -44,8 +44,27 @@ describe("gameplay modifiers", () => {
     expect(loadGameplayModifierSettings(storage)).toEqual(saved);
   });
 
+  it("preserves an explicit shield opt-out", () => {
+    const settings = normalizeGameplayModifierSettings({
+      powerUps: {
+        shield: false,
+      },
+    });
+
+    expect(settings.powerUps.shield).toBe(false);
+    expect(getEnabledPowerUps(settings)).toEqual([]);
+  });
+
   it("does not decorate classic patterns unless modifiers are enabled", () => {
-    const run = createClassicRun(3);
+    const run = createClassicRun(
+      3,
+      undefined,
+      normalizeGameplayModifierSettings({
+        powerUps: {
+          shield: false,
+        },
+      }),
+    );
 
     expect(run.pattern.every((event) => event.kind === "collectible" || event.kind === "obstacle"))
       .toBe(true);

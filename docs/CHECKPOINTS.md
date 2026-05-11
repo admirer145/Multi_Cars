@@ -20,7 +20,7 @@ The basic playable version is working, the deterministic pattern foundation is i
 | 3. Classic Mode | Done | Stable Classic run factory, deterministic restart seeds, speed level display, clearer failure summary, and mode tests are in place. |
 | 4. Menu And UX Foundation | Done | Menu, Classic start flow, settings entry, pause-to-menu flow, summary scene foundation, and navigation tests are in place. |
 | 5. Challenge Mode | Done | Starter authored Challenge track, progress/stars logic, local progress storage, menu entry, gameplay routing, summary routing, and tests are in place. |
-| 6. Practice Mode | Done | Focused deterministic drills, Practice menu flow, gameplay routing, summary/replay, no progress writes, and tests are in place. |
+| 6. Practice Mode | Done | Focused deterministic drills, Practice menu flow, gameplay routing, summary/replay, local best progress, and tests are in place. |
 | 7. Daily Challenge | Done | Date-seeded Daily route, local daily progress, home entry, gameplay routing, summary/replay, and tests are in place. |
 | 8. Engagement Layer | Done | Local achievements, cosmetic-only car skins, Garage surface, optional gameplay modifiers, summary unlock callouts, persistence, and tests are in place. |
 | 9. Replay Last Mistake | Done | Rolling replay capture, summary replay action, non-interactive replay overlay, unit tests, and browser coverage are in place. |
@@ -342,6 +342,7 @@ Completed:
 - Added unit tests for drill definitions, deterministic patterns, validation, one-hand drill scoping, and summaries.
 - Added browser coverage for starting a Practice drill on desktop and mobile profiles.
 - Added a deterministic browser-test failure hook so summary routing tests no longer depend on real-time failure duration.
+- Added local best progress persistence per Practice drill.
 
 Verification:
 
@@ -384,7 +385,7 @@ Completed:
 - Added Garage screen with achievements and car skins.
 - Added summary unlock callouts for newly earned achievements and cosmetic rewards.
 - Applied selected car skin colors to gameplay cars without changing speed, hitboxes, lives, scoring, or fail conditions.
-- Added defaults-off Control Room toggles for shield, slow motion, magnet, score multiplier, dual collect, moving obstacles, fake collectibles, timed gates, and color matching.
+- Added Control Room toggles for shield, slow motion, magnet, score multiplier, dual collect, moving obstacles, fake collectibles, timed gates, and color matching. Shield is default-on; the rest are opt-in.
 - Added deterministic modifier decoration for generated Classic/Daily roads, plus simulation behavior for active power-up effects and advanced hazard/collectible variants.
 - Added unit tests for achievement unlocks, locked/unlocked skin normalization, and persistence.
 - Added unit tests for modifier defaults, persistence, generated-road decoration, shield, fake-collectible shielding, magnet safety, wrong-color traps, and score multiplier behavior.
@@ -492,7 +493,7 @@ Before moving to a new milestone:
 Last verified after Classic Car Count Selection:
 
 ```text
-npm run test      -> passed, 69 tests
+npm run test      -> passed, 71 tests
 npm run build     -> passed
 npm run test:e2e  -> passed, 37 browser tests, 7 expected project-specific skips
 ```

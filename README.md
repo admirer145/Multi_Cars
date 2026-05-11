@@ -8,10 +8,10 @@ The current build is a playable prototype with a React/Tailwind app shell and a 
 
 - Classic mode is playable as an endless run with 1-car and 2-car options.
 - Challenge Roads are playable as finite authored tracks with categories, locked levels, progress, and stars.
-- Practice Drills are playable as finite focused drills without high-score or Challenge progress writes.
+- Practice Drills are playable as finite focused drills with local best progress saved per drill.
 - Daily Road is playable as a date-seeded finite route with isolated local progress.
 - Garage is available with local achievements and cosmetic-only car skins.
-- Control Room can opt into power ups and obstacle variety for generated runs; all modifiers are off by default.
+- Control Room starts Classic at level 5, caps at level 20, and enables Shield by default.
 - Failed runs can open a local non-interactive replay of the final mistake window from the summary screen.
 - The app has install metadata and can reload its cached shell offline after a first online visit.
 - The main menu, Challenge selection, Settings, and Run Ended summary are React/Tailwind screens.
@@ -91,7 +91,7 @@ Challenge Roads are finite authored tracks organized by skill category and level
 
 ### Practice Drills
 
-Practice Drills are finite deterministic routes for specific skills: left-hand focus, right-hand focus, mirror switches, sync lanes, and alternating rhythm. They keep the same fail rules as the main game, but do not write Classic high score or Challenge progress.
+Practice Drills are finite deterministic routes for specific skills: left-hand focus, right-hand focus, mirror switches, sync lanes, and alternating rhythm. They keep the same fail rules as the main game and save local best progress per drill without affecting Classic high score or Challenge progress.
 
 ### Daily Road
 
@@ -103,7 +103,7 @@ Garage contains local achievements and cosmetic-only car skins. Achievement unlo
 
 ### Control Room Modifiers
 
-Power ups and advanced obstacle variety are opt-in settings. Enabled power ups can add shield, slow motion, magnet, score multiplier pickups, and dual-collect pairs. Enabled obstacle variety can add moving obstacles, fake collectibles, timed gates, and color-matching objects where wrong colors act as traps.
+Power ups and advanced obstacle variety are local settings. Shield starts enabled by default; slow motion, magnet, score multiplier pickups, dual-collect pairs, and advanced obstacle variety remain opt-in.
 
 ## Project Structure
 
@@ -147,7 +147,7 @@ Progress, settings, achievements, selected car skin, Challenge progress, and Dai
 Latest documented verification:
 
 ```text
-npm run test      -> passed, 69 tests
+npm run test      -> passed, 71 tests
 npm run build     -> passed
 npm run test:e2e  -> passed, 37 browser tests, 7 expected project-specific skips
 ```

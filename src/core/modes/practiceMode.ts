@@ -49,6 +49,14 @@ export type PracticeRunSummary = RunSummary & {
   modeId: typeof PRACTICE_MODE_ID;
 };
 
+export type PracticeProgress = {
+  drillId: string;
+  bestPercent: number;
+  bestScore: number;
+  completed: boolean;
+  attempts: number;
+};
+
 const PRACTICE_CLEARANCE_MS = 3_200;
 
 export const PRACTICE_DRILLS: PracticeDrill[] = [
@@ -180,18 +188,45 @@ export function createPracticeRun(drillId = getStarterPracticeDrill().id): Pract
 export function createPracticeRunSummary(
   state: SimulationState,
   config: ModeConfig,
+  progress: PracticeProgress = createInitialPracticeProgress(config.seed.replace(`${PRACTICE_MODE_ID}-`, "")),
 ): PracticeRunSummary {
+  const completedPercent = Math.round(state.completedPercent);
   return {
     modeId: PRACTICE_MODE_ID,
     modeLabel: config.label,
     seed: config.seed,
     score: state.score,
-    bestScore: 0,
-    completedPercent: Math.round(state.completedPercent),
+    bestScore: progress.bestPercent,
+    completedPercent,
     speedLevel: 1,
     result: state.status,
     failureReason: state.failure?.reason,
     failedPatternFamily: state.failure?.patternFamily,
+  };
+}
+
+export function createInitialPracticeProgress(drillId: string): PracticeProgress {
+  return {
+    drillId,
+    bestPercent: 0,
+    bestScore: 0,
+    completed: false,
+    attempts: 0,
+  };
+}
+
+export function updatePracticeProgress(
+  current: PracticeProgress,
+  completedPercent: number,
+  score: number,
+): PracticeProgress {
+  const bestPercent = Math.max(current.bestPercent, Math.round(completedPercent));
+  return {
+    ...current,
+    bestPercent,
+    bestScore: Math.max(current.bestScore, score),
+    completed: current.completed || bestPercent >= 100,
+    attempts: current.attempts + 1,
   };
 }
 

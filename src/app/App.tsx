@@ -54,7 +54,7 @@ import {
   type ClassicSpeedSettings,
 } from "../core/modes/classicMode";
 import { createDailyRun, createInitialDailyProgress } from "../core/modes/dailyMode";
-import { PRACTICE_DRILLS, type PracticeDrill } from "../core/modes/practiceMode";
+import { createInitialPracticeProgress, PRACTICE_DRILLS, type PracticeDrill } from "../core/modes/practiceMode";
 import {
   OBSTACLE_VARIETY_OPTIONS,
   POWER_UP_OPTIONS,
@@ -73,6 +73,7 @@ import {
   loadAchievementState,
   loadDailyProgress,
   loadGameplayModifierSettings,
+  loadPracticeProgress,
   loadSelectedCarSkin,
   saveAchievementState,
   saveClassicSpeedSettings,
@@ -586,7 +587,7 @@ function PracticeScreen({
   return (
     <ScreenShell>
       <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-5 px-5 py-7 sm:px-8">
-        <TopBar title="Practice Drills" detail="Pick a focused drill. Same fail rules, no high-score or road progress writes." onBack={onBack} />
+        <TopBar title="Practice Drills" detail="Pick a focused drill. Same fail rules, local best progress saved." onBack={onBack} />
 
         <div className="grid gap-4 md:grid-cols-2">
           {PRACTICE_DRILLS.map((drill) => (
@@ -905,7 +906,7 @@ function SummaryOverlay({
 
         <div className="mt-6 grid grid-cols-3 gap-3">
           <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? "Progress" : "Score"} value={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? `${summary.completedPercent}%` : summary.score} />
-          <ScoreTile label={summary.modeId === "practice" ? "Score" : summary.modeId === "daily" ? "Best" : "Best"} value={summary.modeId === "challenge" ? `${summary.bestScore}%` : summary.modeId === "practice" ? summary.score : summary.bestScore} />
+          <ScoreTile label={summary.modeId === "practice" ? "Best" : summary.modeId === "daily" ? "Best" : "Best"} value={summary.modeId === "challenge" || summary.modeId === "practice" ? `${summary.bestScore}%` : summary.bestScore} />
           <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "daily" ? "Stars" : summary.modeId === "practice" ? "Drill" : "Speed"} value={summary.modeId === "challenge" || summary.modeId === "daily" ? `${summary.stars ?? 0}/3` : summary.modeId === "practice" ? "Local" : summary.speedLevel} />
         </div>
 
@@ -1110,6 +1111,8 @@ function PracticeCard({
   drill: PracticeDrill;
   onStart: (drillId: string) => void;
 }): ReactElement {
+  const progress = loadPracticeProgress(drill.id, createInitialPracticeProgress(drill.id));
+
   return (
     <button
       type="button"
@@ -1131,7 +1134,7 @@ function PracticeCard({
       </div>
       <div className="relative mt-5 flex items-center justify-between text-sm font-black">
         <span>{Math.round(drill.durationMs / 1000)}s drill</span>
-        <span className="text-goldline">No progress save</span>
+        <span className="text-goldline">Best {progress.bestPercent}%</span>
       </div>
     </button>
   );

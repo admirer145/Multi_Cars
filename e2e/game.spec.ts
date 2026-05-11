@@ -19,6 +19,12 @@ async function primeServiceWorkerCache(page: Page): Promise<void> {
     .toBe(true);
 }
 
+async function startClassic(page: Page, optionName = /2 Cars/): Promise<void> {
+  await page.getByRole("button", { name: /Classic Run/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "classic-select");
+  await page.getByRole("button", { name: optionName }).click();
+}
+
 test("boots to the React menu instead of active gameplay", async ({ page }) => {
   await page.goto("/");
 
@@ -30,12 +36,38 @@ test("boots to the React menu instead of active gameplay", async ({ page }) => {
 test("starts Classic from the menu", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByRole("button", { name: /Classic Run/ }).click();
+  await startClassic(page);
 
   await expect(page.locator("canvas")).toBeVisible();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
   await expect(page.locator("body")).toHaveAttribute("data-game-status", "running");
   await expect(page.locator("body")).toHaveAttribute("data-game-seed", "classic-v1-run-0");
+  await expect(page.locator("body")).toHaveAttribute("data-car-count", "2");
+});
+
+test("starts one-car Classic with full-screen single input", async ({ page }) => {
+  await page.goto("/");
+
+  await startClassic(page, /1 Car/);
+
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await expect(page.locator("body")).toHaveAttribute("data-car-count", "1");
+  await expect(page.locator("body")).toHaveAttribute("data-game-seed", "classic-v1-1-car-run-0");
+  await expect(page.locator("body")).toHaveAttribute("data-left-lane", "0");
+  await expect(page.locator("body")).toHaveAttribute("data-right-lane", "");
+
+  const canvas = page.locator("canvas");
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error("Canvas bounding box is unavailable.");
+  }
+
+  await canvas.click({ position: { x: box.width * 0.85, y: box.height * 0.76 } });
+  await expect(page.locator("body")).toHaveAttribute("data-left-lane", "1");
+
+  await page.keyboard.press("Space");
+  await expect(page.locator("body")).toHaveAttribute("data-left-lane", "0");
 });
 
 test("starts Challenge from road selection", async ({ page }) => {
@@ -217,7 +249,7 @@ test("classic speed settings persist and affect gameplay", async ({ page }) => {
   await expect(page.getByLabel("Maximum level")).toHaveValue("5");
 
   await page.getByRole("button").first().click();
-  await page.getByRole("button", { name: /Classic Run/ }).click();
+  await startClassic(page);
 
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
   await expect(page.locator("body")).toHaveAttribute("data-speed-level", "3");
@@ -270,7 +302,7 @@ test("starting Classic from a scrolled mobile menu resets the gameplay viewport"
     .poll(() => page.evaluate(() => window.scrollY))
     .toBeGreaterThan(0);
 
-  await page.getByRole("button", { name: /Classic Run/ }).click();
+  await startClassic(page);
 
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
   await expect
@@ -283,7 +315,7 @@ test("mobile canvas taps are centered between left and right cars", async ({ pag
   test.skip(!testInfo.project.name.includes("mobile"), "Mobile touch split coverage.");
 
   await page.goto("/");
-  await page.getByRole("button", { name: /Classic Run/ }).click();
+  await startClassic(page);
   await expect(page.locator("body")).toHaveAttribute("data-game-status", "running");
 
   const canvas = page.locator("canvas");
@@ -305,7 +337,7 @@ test("mobile supports separate active touches for both cars", async ({ page }, t
   test.skip(!testInfo.project.name.includes("mobile"), "Mobile multi-touch coverage.");
 
   await page.goto("/");
-  await page.getByRole("button", { name: /Classic Run/ }).click();
+  await startClassic(page);
   await expect(page.locator("body")).toHaveAttribute("data-game-status", "running");
 
   const canvas = page.locator("canvas");
@@ -360,7 +392,7 @@ test("accepts keyboard controls and pause", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes("mobile"), "Keyboard shortcuts are desktop coverage.");
 
   await page.goto("/");
-  await page.getByRole("button", { name: /Classic Run/ }).click();
+  await startClassic(page);
   await expect(page.locator("body")).toHaveAttribute("data-game-status", "running");
 
   await page.keyboard.press("P");
@@ -372,7 +404,7 @@ test("returns to menu from paused gameplay", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes("mobile"), "Keyboard shortcuts are desktop coverage.");
 
   await page.goto("/");
-  await page.getByRole("button", { name: /Classic Run/ }).click();
+  await startClassic(page);
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
 
   await page.keyboard.press("P");

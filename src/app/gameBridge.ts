@@ -1,8 +1,9 @@
 import type { RunSummary, SimulationState } from "../core/types";
 import type { AchievementId } from "../core/engagement/achievements";
 import type { ReplayClip } from "../core/replay/replayBuffer";
+import type { SupportedClassicCarCount } from "../core/constants";
 
-export type AppScreen = "home" | "challenge-select" | "practice-select" | "garage" | "settings" | "gameplay" | "summary";
+export type AppScreen = "home" | "classic-select" | "challenge-select" | "practice-select" | "garage" | "settings" | "gameplay" | "summary";
 export type PlayMode = "classic" | "challenge" | "practice" | "daily";
 
 export type GameBootConfig = {
@@ -10,6 +11,7 @@ export type GameBootConfig = {
   runIndex?: number;
   trackId?: string;
   drillId?: string;
+  carCount?: SupportedClassicCarCount;
 };
 
 export type RunEndedDetail = {
@@ -18,6 +20,7 @@ export type RunEndedDetail = {
   mode: PlayMode;
   trackId?: string;
   drillId?: string;
+  carCount?: SupportedClassicCarCount;
   unlockedAchievementIds?: AchievementId[];
   finalState?: SimulationState;
   replay?: ReplayClip;

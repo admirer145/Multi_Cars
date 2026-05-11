@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChangeEvent, ReactElement, ReactNode } from "react";
 import Phaser from "phaser";
 import {
+  Car,
   ArrowLeft,
   Gauge,
   Headphones,
@@ -37,7 +38,8 @@ import {
   type AchievementState,
   type CarSkinId,
 } from "../core/engagement/achievements";
-import { COLLECTION_Y } from "../core/constants";
+import { COLLECTION_Y, getActiveRoadSides } from "../core/constants";
+import type { SupportedClassicCarCount } from "../core/constants";
 import {
   AUTHORED_TRACKS,
   getAuthoredTracksByCategory,
@@ -45,8 +47,10 @@ import {
 } from "../core/patterns/authoredTracks";
 import { createInitialChallengeProgress } from "../core/modes/challengeMode";
 import {
+  CLASSIC_CAR_OPTIONS,
   MAX_CLASSIC_SPEED_LEVEL,
   MIN_CLASSIC_SPEED_LEVEL,
+  formatClassicModeLabel,
   type ClassicSpeedSettings,
 } from "../core/modes/classicMode";
 import { createDailyRun, createInitialDailyProgress } from "../core/modes/dailyMode";
@@ -64,6 +68,7 @@ import type { ActiveObjectState, RoadSide } from "../core/types";
 import {
   loadChallengeProgress,
   loadClassicHighScore,
+  loadClassicHighScoreForCarCount,
   loadClassicSpeedSettings,
   loadAchievementState,
   loadDailyProgress,
@@ -274,12 +279,19 @@ export function App(): ReactElement {
 
       {screen === "home" ? (
         <HomeScreen
-          onClassic={() => startRun("classic", { runIndex: 0 })}
+          onClassic={() => navigateToStaticScreen("classic-select")}
           onChallenge={() => navigateToStaticScreen("challenge-select")}
           onPractice={() => navigateToStaticScreen("practice-select")}
           onDaily={() => startRun("daily")}
           onGarage={() => navigateToStaticScreen("garage")}
           onSettings={() => navigateToStaticScreen("settings")}
+        />
+      ) : null}
+
+      {screen === "classic-select" ? (
+        <ClassicScreen
+          onBack={goBack}
+          onStart={(carCount) => startRun("classic", { runIndex: 0, carCount })}
         />
       ) : null}
 
@@ -329,6 +341,7 @@ export function App(): ReactElement {
                 runIndex: summary.nextRunIndex,
                 trackId: summary.trackId,
                 drillId: summary.drillId,
+                carCount: summary.carCount,
               },
               { replace: true },
             )
@@ -456,6 +469,56 @@ function HomeScreen({
             />
           </div>
           <RoadShowcase />
+        </div>
+      </section>
+    </ScreenShell>
+  );
+}
+
+function ClassicScreen({
+  onBack,
+  onStart,
+}: {
+  onBack: () => void;
+  onStart: (carCount: SupportedClassicCarCount) => void;
+}): ReactElement {
+  const optionDetails: Record<SupportedClassicCarCount, string> = {
+    1: "One centered car, two lanes, and a single full-screen input.",
+    2: "The original two-car, four-lane Classic pressure run.",
+  };
+
+  return (
+    <ScreenShell>
+      <section className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-5 px-5 py-7 sm:px-8">
+        <TopBar title="Classic Run" detail="Pick the number of cars for this run." onBack={onBack} />
+        <div className="grid flex-1 content-center gap-4 sm:grid-cols-2">
+          {CLASSIC_CAR_OPTIONS.map((carCount) => (
+            <button
+              key={carCount}
+              type="button"
+              onClick={() => onStart(carCount)}
+              className="group min-h-64 rounded-3xl border border-white/12 bg-panel/84 p-6 text-left shadow-2xl transition hover:-translate-y-1 hover:border-cyanline/70 hover:shadow-glow focus:outline-none focus:ring-2 focus:ring-cyanline"
+            >
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-cyanline text-ink">
+                <Car />
+              </span>
+              <h2 className="mt-5 text-3xl font-black">{formatClassicModeLabel(carCount)}</h2>
+              <p className="mt-3 text-base font-semibold leading-relaxed text-slate-300">
+                {optionDetails[carCount]}
+              </p>
+              <div className="mt-6 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Best</p>
+                  <p className="mt-1 text-3xl font-black text-goldline">
+                    {loadClassicHighScoreForCarCount(carCount)}
+                  </p>
+                </div>
+                <span className="rounded-2xl bg-white/8 px-4 py-3 text-sm font-black text-slate-100 transition group-hover:bg-cyanline group-hover:text-ink">
+                  Start
+                </span>
+              </div>
+            </button>
+          ))}
         </div>
       </section>
     </ScreenShell>
@@ -779,7 +842,7 @@ function SummaryOverlay({
 }): ReactElement {
   const { summary } = detail;
   const [showReplay, setShowReplay] = useState(false);
-  const backLabel = summary.modeId === "challenge" || summary.modeId === "practice" ? "Back" : "Menu";
+  const backLabel = summary.modeId === "classic" || summary.modeId === "challenge" || summary.modeId === "practice" ? "Back" : "Menu";
   const canReplayMistake = summary.result === "failed" && Boolean(detail.replay?.frames.length && detail.replay.frames.length > 1);
 
   useEffect(() => {
@@ -1216,18 +1279,16 @@ function drawReplayFrame(context: CanvasRenderingContext2D, frame: ReplayFrame):
   const scaleX = width / GAME_WIDTH;
   const scaleY = height / GAME_HEIGHT;
   const scale = (value: number, axis: "x" | "y") => value * (axis === "x" ? scaleX : scaleY);
-  const laneX: Record<RoadSide, [number, number]> = {
-    left: [154, 270],
-    right: [450, 566],
-  };
+  const laneX = getReplayLaneX(frame.state.carCount);
+  const activeSides = getActiveRoadSides(frame.state.carCount);
 
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#070b12";
   context.fillRect(0, 0, width, height);
-  drawReplayRoad(context, scale);
+  drawReplayRoad(context, scale, frame.state.carCount);
 
   for (const object of frame.state.objects) {
-    if (object.collected || object.y < 70 || object.y > GAME_HEIGHT + 90) {
+    if (!activeSides.includes(object.side) || object.collected || object.y < 70 || object.y > GAME_HEIGHT + 90) {
       continue;
     }
 
@@ -1241,8 +1302,14 @@ function drawReplayFrame(context: CanvasRenderingContext2D, frame: ReplayFrame):
     );
   }
 
-  drawReplayCar(context, scale(laneX.left[frame.state.cars.left.lane], "x"), scale(COLLECTION_Y, "y"), "#3dd6c6");
-  drawReplayCar(context, scale(laneX.right[frame.state.cars.right.lane], "x"), scale(COLLECTION_Y, "y"), "#ffd166");
+  for (const side of activeSides) {
+    drawReplayCar(
+      context,
+      scale(laneX[side][frame.state.cars[side].lane], "x"),
+      scale(COLLECTION_Y, "y"),
+      side === "right" ? "#ffd166" : "#3dd6c6",
+    );
+  }
 
   context.fillStyle = "rgba(7, 11, 18, 0.82)";
   roundRect(context, 44 * scaleX, 14 * scaleY, width - 88 * scaleX, 32 * scaleY, 10 * scaleX);
@@ -1256,23 +1323,51 @@ function drawReplayFrame(context: CanvasRenderingContext2D, frame: ReplayFrame):
 function drawReplayRoad(
   context: CanvasRenderingContext2D,
   scale: (value: number, axis: "x" | "y") => number,
+  carCount: number,
 ): void {
-  context.fillStyle = "#101827";
-  roundRect(context, scale(46, "x"), scale(94, "y"), scale(628, "x"), scale(1220, "y"), scale(16, "x"));
-  context.fill();
-  context.fillStyle = "#202938";
-  roundRect(context, scale(92, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
-  context.fill();
-  roundRect(context, scale(384, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
-  context.fill();
+  if (carCount === 1) {
+    context.fillStyle = "#101827";
+    roundRect(context, scale(166, "x"), scale(94, "y"), scale(388, "x"), scale(1220, "y"), scale(16, "x"));
+    context.fill();
+    context.fillStyle = "#202938";
+    roundRect(context, scale(238, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
+    context.fill();
+  } else {
+    context.fillStyle = "#101827";
+    roundRect(context, scale(46, "x"), scale(94, "y"), scale(628, "x"), scale(1220, "y"), scale(16, "x"));
+    context.fill();
+    context.fillStyle = "#202938";
+    roundRect(context, scale(92, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
+    context.fill();
+    roundRect(context, scale(384, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
+    context.fill();
+  }
+
   context.strokeStyle = "rgba(248, 250, 252, 0.22)";
   context.lineWidth = scale(4, "x");
   context.beginPath();
-  context.moveTo(scale(214, "x"), scale(100, "y"));
-  context.lineTo(scale(214, "x"), scale(1280, "y"));
-  context.moveTo(scale(506, "x"), scale(100, "y"));
-  context.lineTo(scale(506, "x"), scale(1280, "y"));
+  if (carCount === 1) {
+    context.moveTo(scale(360, "x"), scale(100, "y"));
+    context.lineTo(scale(360, "x"), scale(1280, "y"));
+  } else {
+    context.moveTo(scale(214, "x"), scale(100, "y"));
+    context.lineTo(scale(214, "x"), scale(1280, "y"));
+    context.moveTo(scale(506, "x"), scale(100, "y"));
+    context.lineTo(scale(506, "x"), scale(1280, "y"));
+  }
   context.stroke();
+}
+
+function getReplayLaneX(carCount: number): Record<RoadSide, [number, number]> {
+  return carCount === 1
+    ? {
+        left: [302, 418],
+        right: [450, 566],
+      }
+    : {
+        left: [154, 270],
+        right: [450, 566],
+      };
 }
 
 function drawReplayObject(
@@ -1671,10 +1766,14 @@ function isTrackLocked(track: AuthoredTrack): boolean {
 }
 
 function getRunKey(run: GameBootConfig): string {
-  return `${run.mode}-${run.trackId ?? run.drillId ?? ""}-${run.runIndex ?? 0}`;
+  return `${run.mode}-${run.trackId ?? run.drillId ?? ""}-${run.runIndex ?? 0}-${run.carCount ?? ""}`;
 }
 
 function getRunReturnScreen(mode: PlayMode): Exclude<AppScreen, "gameplay" | "summary"> {
+  if (mode === "classic") {
+    return "classic-select";
+  }
+
   if (mode === "challenge") {
     return "challenge-select";
   }

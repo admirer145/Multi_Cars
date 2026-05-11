@@ -1,4 +1,4 @@
-import { LANES, ROAD_SIDES } from "../constants";
+import { getActiveRoadSides, LANES, ROAD_SIDES } from "../constants";
 import {
   getEnabledObstacleVarieties,
   getEnabledPowerUps,
@@ -26,6 +26,7 @@ type SidePlan = {
 
 export function generatePattern(config: ModeConfig): PatternEvent[] {
   const rng = createSeededRng(`${config.id}:${config.seed}:${config.difficulty}`);
+  const activeSides = getActiveRoadSides(config.carCount);
   const events: PatternEvent[] = [];
   const families = config.allowedFamilies?.length
     ? config.allowedFamilies
@@ -36,7 +37,7 @@ export function generatePattern(config: ModeConfig): PatternEvent[] {
   while (timeMs <= config.durationMs) {
     const beatDifficulty = getBeatDifficulty(config.difficulty, beat);
     const family = chooseFamily(families, beat, beatDifficulty, rng);
-    const plans = createFamilyPlans(family, beat, beatDifficulty, rng);
+    const plans = createFamilyPlans(family, beat, beatDifficulty, rng, activeSides);
     let beatEndTimeMs = timeMs;
 
     for (let index = 0; index < plans.length; index += 1) {
@@ -85,56 +86,61 @@ function createFamilyPlans(
   beat: number,
   difficulty: number,
   rng: Rng,
+  activeSides: RoadSide[],
 ): SidePlan[] {
   switch (family) {
     case "focus":
-      return createFocusPlans(beat, rng);
+      return createFocusPlans(beat, rng, activeSides);
     case "sync":
-      return createSyncPlans(beat, rng);
+      return createSyncPlans(beat, rng, activeSides);
     case "mirror":
-      return createMirrorPlans(beat, rng);
+      return createMirrorPlans(beat, rng, activeSides);
     case "alternating":
-      return createAlternatingPlans(beat, rng);
+      return createAlternatingPlans(beat, rng, activeSides);
     case "delayed":
-      return createDelayedPlans(beat, difficulty, rng);
+      return createDelayedPlans(beat, difficulty, rng, activeSides);
     case "deceptive":
-      return createDeceptivePlans(beat, rng);
+      return createDeceptivePlans(beat, rng, activeSides);
     case "pressure":
-      return createPressurePlans(beat, difficulty, rng);
+      return createPressurePlans(beat, difficulty, rng, activeSides);
     case "recovery":
-      return createRecoveryPlans(beat, rng);
+      return createRecoveryPlans(beat, rng, activeSides);
   }
 }
 
-function createFocusPlans(beat: number, rng: Rng): SidePlan[] {
-  const side = rng.pick(ROAD_SIDES);
+function createFocusPlans(beat: number, rng: Rng, activeSides: RoadSide[]): SidePlan[] {
+  const side = rng.pick(activeSides);
   return [{ side, lane: rng.pick(LANES), kind: chooseKind(beat, rng, 0.86) }];
 }
 
-function createSyncPlans(beat: number, rng: Rng): SidePlan[] {
+function createSyncPlans(beat: number, rng: Rng, activeSides: RoadSide[]): SidePlan[] {
   const lane = rng.pick(LANES);
-  return [
-    { side: "left", lane, kind: chooseKind(beat, rng, 0.78) },
-    { side: "right", lane, kind: chooseKind(beat + 1, rng, 0.78) },
-  ];
+  return activeSides.map((side, index) => ({
+    side,
+    lane,
+    kind: chooseKind(beat + index, rng, 0.78),
+  }));
 }
 
-function createMirrorPlans(beat: number, rng: Rng): SidePlan[] {
+function createMirrorPlans(beat: number, rng: Rng, activeSides: RoadSide[]): SidePlan[] {
   const leftLane = rng.pick(LANES);
-  return [
-    { side: "left", lane: leftLane, kind: chooseKind(beat, rng, 0.76) },
-    { side: "right", lane: invertLane(leftLane), kind: chooseKind(beat + 1, rng, 0.76) },
-  ];
+  return activeSides.map((side, index) => ({
+    side,
+    lane: index % 2 === 0 ? leftLane : invertLane(leftLane),
+    kind: chooseKind(beat + index, rng, 0.76),
+  }));
 }
 
-function createAlternatingPlans(beat: number, rng: Rng): SidePlan[] {
-  const side = beat % 2 === 0 ? "left" : "right";
+function createAlternatingPlans(beat: number, rng: Rng, activeSides: RoadSide[]): SidePlan[] {
+  const side = activeSides[beat % activeSides.length];
   return [{ side, lane: rng.pick(LANES), kind: chooseKind(beat, rng, 0.8) }];
 }
 
-function createDelayedPlans(beat: number, difficulty: number, rng: Rng): SidePlan[] {
-  const firstSide = rng.pick(ROAD_SIDES);
-  const secondSide = firstSide === "left" ? "right" : "left";
+function createDelayedPlans(beat: number, difficulty: number, rng: Rng, activeSides: RoadSide[]): SidePlan[] {
+  const firstSide = rng.pick(activeSides);
+  const secondSide = activeSides.length > 1
+    ? activeSides.find((side) => side !== firstSide) ?? firstSide
+    : firstSide;
   const delayMs = Math.max(380, 620 - difficulty * 40);
 
   return [
@@ -148,24 +154,24 @@ function createDelayedPlans(beat: number, difficulty: number, rng: Rng): SidePla
   ];
 }
 
-function createDeceptivePlans(beat: number, rng: Rng): SidePlan[] {
+function createDeceptivePlans(beat: number, rng: Rng, activeSides: RoadSide[]): SidePlan[] {
   const repeatedLane = beat % 4 === 3 ? 1 : 0;
-  const side = rng.pick(ROAD_SIDES);
+  const side = rng.pick(activeSides);
   return [{ side, lane: repeatedLane, kind: chooseKind(beat, rng, 0.74) }];
 }
 
-function createPressurePlans(beat: number, difficulty: number, rng: Rng): SidePlan[] {
+function createPressurePlans(beat: number, difficulty: number, rng: Rng, activeSides: RoadSide[]): SidePlan[] {
   const leftLane = rng.pick(LANES);
   const rightLane = difficulty >= 4 ? invertLane(leftLane) : rng.pick(LANES);
-
-  return [
-    { side: "left", lane: leftLane, kind: chooseKind(beat, rng, 0.72) },
-    { side: "right", lane: rightLane, kind: chooseKind(beat + 1, rng, 0.72) },
-  ];
+  return activeSides.map((side, index) => ({
+    side,
+    lane: index % 2 === 0 ? leftLane : rightLane,
+    kind: chooseKind(beat + index, rng, 0.72),
+  }));
 }
 
-function createRecoveryPlans(beat: number, rng: Rng): SidePlan[] {
-  const side = beat % 2 === 0 ? "left" : "right";
+function createRecoveryPlans(beat: number, rng: Rng, activeSides: RoadSide[]): SidePlan[] {
+  const side = activeSides[beat % activeSides.length];
   return [{ side, lane: rng.pick(LANES), kind: chooseKind(beat, rng, 0.92) }];
 }
 

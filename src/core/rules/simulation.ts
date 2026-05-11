@@ -1,4 +1,4 @@
-import { COLLECTION_Y, SPAWN_Y } from "../constants";
+import { COLLECTION_Y, getActiveRoadSides, normalizeClassicCarCount, SPAWN_Y } from "../constants";
 import { getSpeedAtTime } from "../difficulty/difficultyModel";
 import { POWER_UP_DURATION_MS } from "../modifiers/gameplayModifiers";
 import type {
@@ -106,6 +106,7 @@ export class GameSimulation {
   private createInitialState(): SimulationState {
     return {
       timeMs: 0,
+      carCount: normalizeClassicCarCount(this.config.carCount),
       cars: {
         left: { side: "left", lane: 0 },
         right: { side: "right", lane: 1 },
@@ -124,6 +125,10 @@ export class GameSimulation {
   }
 
   private toggleCar(side: RoadSide): void {
+    if (!getActiveRoadSides(this.state.carCount).includes(side)) {
+      return;
+    }
+
     const car = this.state.cars[side];
     car.lane = car.lane === 0 ? 1 : 0;
   }

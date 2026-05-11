@@ -39,6 +39,18 @@ describe("classic mode", () => {
     expect(first.pattern).not.toEqual(second.pattern);
   });
 
+  it("can create a one-car Classic run with only one active road side", () => {
+    const run = createClassicRun(0, undefined, undefined, 1);
+
+    expect(run.config).toMatchObject({
+      carCount: 1,
+      label: "Classic 1 Car",
+      seed: "classic-v1-1-car-run-0",
+    });
+    expect(run.pattern.length).toBeGreaterThan(0);
+    expect(run.pattern.every((event) => event.side === "left")).toBe(true);
+  });
+
   it("uses a predictable speed level curve", () => {
     expect(getClassicSpeedLevel(0)).toBe(1);
     expect(getClassicSpeedLevel(15_000)).toBe(2);

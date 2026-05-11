@@ -1,7 +1,12 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../../app/gameConfig";
 import { emitMenuRequested, emitRunEnded } from "../../app/gameBridge";
-import { COLLECTION_Y } from "../../core/constants";
+import {
+  COLLECTION_Y,
+  getActiveRoadSides,
+  normalizeClassicCarCount,
+  type SupportedClassicCarCount,
+} from "../../core/constants";
 import {
   createClassicRun,
   createClassicRunSummary,
@@ -37,12 +42,14 @@ import type { ActiveObjectState, ModeConfig, PatternEvent, RoadSide, SimulationS
 import {
   loadChallengeProgress,
   loadClassicHighScore,
+  loadClassicHighScoreForCarCount,
   loadClassicSpeedSettings,
   loadDailyProgress,
   loadGameplayModifierSettings,
   loadSelectedCarSkin,
   saveChallengeProgress,
   saveClassicHighScore,
+  saveClassicHighScoreForCarCount,
   saveDailyProgress,
 } from "../../persistence/storage";
 import { getCarSkin } from "../../core/engagement/achievements";
@@ -60,8 +67,12 @@ const ROAD_THEME_COLORS = {
   canyon: { road: 0x2a211b, lane: 0xffd166, edge: 0xf97316 },
 };
 
-const LANE_X: Record<RoadSide, [number, number]> = {
+const TWO_CAR_LANE_X: Record<RoadSide, [number, number]> = {
   left: [154, 270],
+  right: [450, 566],
+};
+const ONE_CAR_LANE_X: Record<RoadSide, [number, number]> = {
+  left: [302, 418],
   right: [450, 566],
 };
 const EXTRA_TOUCH_POINTERS = 3;
@@ -71,6 +82,7 @@ type GameplaySceneData = {
   runIndex?: number;
   trackId?: string;
   drillId?: string;
+  carCount?: SupportedClassicCarCount;
 };
 
 export class GameplayScene extends Phaser.Scene {
@@ -90,6 +102,7 @@ export class GameplayScene extends Phaser.Scene {
   private challengeProgress?: ChallengeProgress;
   private dailyProgress?: DailyProgress;
   private runIndex = 0;
+  private carCount: SupportedClassicCarCount = 2;
   private highScore = 0;
   private lastStatus: SimulationState["status"] = "ready";
   private lastFrameDeltaMs = 16;
@@ -99,8 +112,8 @@ export class GameplayScene extends Phaser.Scene {
     right: 0xffd166,
   };
   private visualCarPose: Record<RoadSide, { frontX: number; rearX: number }> = {
-    left: { frontX: LANE_X.left[0], rearX: LANE_X.left[0] },
-    right: { frontX: LANE_X.right[1], rearX: LANE_X.right[1] },
+    left: { frontX: TWO_CAR_LANE_X.left[0], rearX: TWO_CAR_LANE_X.left[0] },
+    right: { frontX: TWO_CAR_LANE_X.right[1], rearX: TWO_CAR_LANE_X.right[1] },
   };
 
   constructor() {
@@ -109,7 +122,7 @@ export class GameplayScene extends Phaser.Scene {
 
   create(data: GameplaySceneData = {}): void {
     this.startRun({ ...window.__MULTI_CARS_BOOT__, ...data });
-    this.highScore = loadClassicHighScore();
+    this.highScore = loadClassicHighScoreForCarCount(this.carCount);
     this.input.addPointer(EXTRA_TOUCH_POINTERS);
 
     this.graphics = this.add.graphics();
@@ -162,8 +175,8 @@ export class GameplayScene extends Phaser.Scene {
       (state.status === "failed" || state.status === "completed") &&
       this.lastStatus !== state.status
     ) {
-      saveClassicHighScore(state.score);
-      this.highScore = loadClassicHighScore();
+      saveClassicHighScoreForCarCount(state.score, this.carCount);
+      this.highScore = loadClassicHighScoreForCarCount(this.carCount);
     }
 
     this.renderState(state);
@@ -184,6 +197,7 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-LEFT", () => this.toggleLeft());
     this.input.keyboard?.on("keydown-L", () => this.toggleRight());
     this.input.keyboard?.on("keydown-RIGHT", () => this.toggleRight());
+    this.input.keyboard?.on("keydown-SPACE", () => this.togglePrimaryCar());
     this.input.keyboard?.on("keydown-R", () => {
       if (!this.hasDispatchedEnd) {
         this.restart();
@@ -218,13 +232,28 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private toggleLeft(): void {
+    if (this.carCount === 1) {
+      this.togglePrimaryCar();
+      return;
+    }
+
     const state = this.simulation.getState();
     this.simulation.applyInput({ type: "TOGGLE_LEFT", atMs: state.timeMs });
   }
 
   private toggleRight(): void {
+    if (this.carCount === 1) {
+      this.togglePrimaryCar();
+      return;
+    }
+
     const state = this.simulation.getState();
     this.simulation.applyInput({ type: "TOGGLE_RIGHT", atMs: state.timeMs });
+  }
+
+  private togglePrimaryCar(): void {
+    const state = this.simulation.getState();
+    this.simulation.applyInput({ type: "TOGGLE_LEFT", atMs: state.timeMs });
   }
 
   private togglePause(): void {
@@ -244,7 +273,7 @@ export class GameplayScene extends Phaser.Scene {
           ? { mode: "practice", drillId: this.practiceRun?.drill.id }
           : this.activeMode === "daily"
             ? { mode: "daily" }
-            : { mode: "classic", runIndex: this.runIndex + 1 },
+            : { mode: "classic", runIndex: this.runIndex + 1, carCount: this.carCount },
     );
     this.simulation.applyInput({ type: "RESTART", atMs: 0 });
   }
@@ -256,6 +285,8 @@ export class GameplayScene extends Phaser.Scene {
   private startRun(data: GameplaySceneData): void {
     this.activeMode = data.mode ?? "classic";
     this.runIndex = data.runIndex ?? 0;
+    this.carCount = this.activeMode === "classic" ? normalizeClassicCarCount(data.carCount) : 2;
+    this.highScore = loadClassicHighScoreForCarCount(this.carCount);
     const selectedSkin = getCarSkin(loadSelectedCarSkin());
     this.carColors = {
       left: selectedSkin.leftColor,
@@ -292,21 +323,22 @@ export class GameplayScene extends Phaser.Scene {
       this.modeConfig = this.dailyRun.config;
       this.pattern = this.dailyRun.pattern;
     } else {
-      this.classicRun = createClassicRun(this.runIndex, loadClassicSpeedSettings(), modifierSettings);
+      this.classicRun = createClassicRun(this.runIndex, loadClassicSpeedSettings(), modifierSettings, this.carCount);
       this.modeConfig = this.classicRun.config;
       this.pattern = this.classicRun.pattern;
     }
 
     this.simulation = new GameSimulation(this.modeConfig, this.pattern);
     const initialState = this.simulation.getState();
+    const laneX = this.getLaneX(initialState.carCount);
     this.visualCarPose = {
       left: {
-        frontX: LANE_X.left[initialState.cars.left.lane],
-        rearX: LANE_X.left[initialState.cars.left.lane],
+        frontX: laneX.left[initialState.cars.left.lane],
+        rearX: laneX.left[initialState.cars.left.lane],
       },
       right: {
-        frontX: LANE_X.right[initialState.cars.right.lane],
-        rearX: LANE_X.right[initialState.cars.right.lane],
+        frontX: laneX.right[initialState.cars.right.lane],
+        rearX: laneX.right[initialState.cars.right.lane],
       },
     };
     this.lastStatus = "ready";
@@ -316,7 +348,7 @@ export class GameplayScene extends Phaser.Scene {
   private renderState(state: SimulationState): void {
     this.graphics.clear();
     this.drawRoads(state);
-    this.drawObjects(state.objects, state.timeMs);
+    this.drawObjects(state.objects, state.timeMs, state.carCount);
     this.drawCars(state);
     this.drawHudPanel(state);
     this.updateHud(state);
@@ -326,32 +358,51 @@ export class GameplayScene extends Phaser.Scene {
   private drawRoads(state: SimulationState): void {
     const theme = this.challengeRun?.track.roadTheme ?? this.practiceRun?.drill.roadTheme ?? (this.dailyRun ? "storm" : "city");
     const colors = ROAD_THEME_COLORS[theme];
+    const activeSides = this.getActiveSides(state.carCount);
     this.graphics.fillStyle(0x0b1017, 1);
     this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     this.graphics.fillStyle(0x070b12, 1);
     this.graphics.fillRect(0, 0, GAME_WIDTH, ROAD_TOP);
 
-    this.graphics.fillStyle(0x101827, 1);
-    this.graphics.fillRoundedRect(46, ROAD_TOP - 28, 628, GAME_HEIGHT - ROAD_TOP + 56, 22);
-    this.graphics.lineStyle(5, colors.edge, 0.55);
-    this.graphics.strokeRoundedRect(46, ROAD_TOP - 28, 628, GAME_HEIGHT - ROAD_TOP + 56, 22);
+    if (activeSides.length === 1) {
+      this.graphics.fillStyle(0x101827, 1);
+      this.graphics.fillRoundedRect(166, ROAD_TOP - 28, 388, GAME_HEIGHT - ROAD_TOP + 56, 22);
+      this.graphics.lineStyle(5, colors.edge, 0.55);
+      this.graphics.strokeRoundedRect(166, ROAD_TOP - 28, 388, GAME_HEIGHT - ROAD_TOP + 56, 22);
 
-    this.graphics.fillStyle(colors.road, 1);
-    this.graphics.fillRoundedRect(92, ROAD_TOP - 22, 244, GAME_HEIGHT - ROAD_TOP + 44, 18);
-    this.graphics.fillRoundedRect(384, ROAD_TOP - 22, 244, GAME_HEIGHT - ROAD_TOP + 44, 18);
+      this.graphics.fillStyle(colors.road, 1);
+      this.graphics.fillRoundedRect(238, ROAD_TOP - 22, 244, GAME_HEIGHT - ROAD_TOP + 44, 18);
 
-    this.graphics.fillStyle(0xffffff, 0.045);
-    this.graphics.fillRoundedRect(118, ROAD_TOP - 8, 88, GAME_HEIGHT - ROAD_TOP + 16, 12);
-    this.graphics.fillRoundedRect(238, ROAD_TOP - 8, 72, GAME_HEIGHT - ROAD_TOP + 16, 12);
-    this.graphics.fillRoundedRect(410, ROAD_TOP - 8, 88, GAME_HEIGHT - ROAD_TOP + 16, 12);
-    this.graphics.fillRoundedRect(530, ROAD_TOP - 8, 72, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillStyle(0xffffff, 0.045);
+      this.graphics.fillRoundedRect(264, ROAD_TOP - 8, 88, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(384, ROAD_TOP - 8, 72, GAME_HEIGHT - ROAD_TOP + 16, 12);
+    } else {
+      this.graphics.fillStyle(0x101827, 1);
+      this.graphics.fillRoundedRect(46, ROAD_TOP - 28, 628, GAME_HEIGHT - ROAD_TOP + 56, 22);
+      this.graphics.lineStyle(5, colors.edge, 0.55);
+      this.graphics.strokeRoundedRect(46, ROAD_TOP - 28, 628, GAME_HEIGHT - ROAD_TOP + 56, 22);
+
+      this.graphics.fillStyle(colors.road, 1);
+      this.graphics.fillRoundedRect(92, ROAD_TOP - 22, 244, GAME_HEIGHT - ROAD_TOP + 44, 18);
+      this.graphics.fillRoundedRect(384, ROAD_TOP - 22, 244, GAME_HEIGHT - ROAD_TOP + 44, 18);
+
+      this.graphics.fillStyle(0xffffff, 0.045);
+      this.graphics.fillRoundedRect(118, ROAD_TOP - 8, 88, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(238, ROAD_TOP - 8, 72, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(410, ROAD_TOP - 8, 88, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(530, ROAD_TOP - 8, 72, GAME_HEIGHT - ROAD_TOP + 16, 12);
+    }
 
     this.graphics.lineStyle(4, colors.lane, 0.76);
     const dashOffset = (state.timeMs / 9) % 112;
     for (let y = ROAD_TOP - 112 + dashOffset; y < GAME_HEIGHT + 120; y += 112) {
-      this.graphics.lineBetween(214, y, 214, y + 54);
-      this.graphics.lineBetween(506, y, 506, y + 54);
+      if (activeSides.length === 1) {
+        this.graphics.lineBetween(360, y, 360, y + 54);
+      } else {
+        this.graphics.lineBetween(214, y, 214, y + 54);
+        this.graphics.lineBetween(506, y, 506, y + 54);
+      }
     }
 
     this.graphics.lineStyle(2, colors.edge, 0.24);
@@ -362,16 +413,19 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.graphics.lineStyle(3, 0xffffff, 0.16);
-    this.graphics.lineBetween(360, ROAD_TOP, 360, GAME_HEIGHT);
+    if (activeSides.length > 1) {
+      this.graphics.lineBetween(360, ROAD_TOP, 360, GAME_HEIGHT);
+    }
   }
 
   private drawCars(state: SimulationState): void {
-    this.drawMovingCar("left", state, this.carColors.left);
-    this.drawMovingCar("right", state, this.carColors.right);
+    for (const side of this.getActiveSides(state.carCount)) {
+      this.drawMovingCar(side, state, this.carColors[side]);
+    }
   }
 
   private drawMovingCar(side: RoadSide, state: SimulationState, color: number): void {
-    const targetX = LANE_X[side][state.cars[side].lane];
+    const targetX = this.getLaneX(state.carCount)[side][state.cars[side].lane];
     const pose = this.visualCarPose[side];
     const frontBlend = 1 - Math.exp(-this.lastFrameDeltaMs / 18);
     const rearBlend = 1 - Math.exp(-this.lastFrameDeltaMs / 32);
@@ -554,7 +608,9 @@ export class GameplayScene extends Phaser.Scene {
     this.drawClosedShape(shinePoints);
   }
 
-  private drawObjects(objects: ActiveObjectState[], timeMs: number): void {
+  private drawObjects(objects: ActiveObjectState[], timeMs: number, carCount: SupportedClassicCarCount): void {
+    const laneX = this.getLaneX(carCount);
+
     for (const object of objects) {
       if (object.collected) {
         continue;
@@ -564,7 +620,7 @@ export class GameplayScene extends Phaser.Scene {
         continue;
       }
 
-      const x = LANE_X[object.side][object.lane];
+      const x = laneX[object.side][object.lane];
 
       switch (object.kind) {
         case "collectible":
@@ -862,11 +918,12 @@ export class GameplayScene extends Phaser.Scene {
     document.body.dataset.gameStatus = state.status;
     document.body.dataset.gameScore = String(state.score);
     document.body.dataset.gameSeed = this.modeConfig.seed;
+    document.body.dataset.carCount = String(state.carCount);
     document.body.dataset.speedLevel = String(this.getDisplayedSpeedLevel(state));
     document.body.dataset.failureReason = state.failure?.reason ?? "";
     document.body.dataset.patternFamily = state.failure?.patternFamily ?? "";
     document.body.dataset.leftLane = String(state.cars.left.lane);
-    document.body.dataset.rightLane = String(state.cars.right.lane);
+    document.body.dataset.rightLane = this.getActiveSides(state.carCount).includes("right") ? String(state.cars.right.lane) : "";
     document.body.dataset.shieldCharges = String(state.powerUps.shieldCharges);
     document.body.dataset.powerUpStatus = this.formatPowerUpStatus(state);
   }
@@ -881,7 +938,7 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    if (pointer.x < GAME_WIDTH / 2) {
+    if (state.carCount === 1 || pointer.x < GAME_WIDTH / 2) {
       this.simulation.applyInput({ type: "TOGGLE_LEFT", atMs: state.timeMs });
       return;
     }
@@ -948,8 +1005,17 @@ export class GameplayScene extends Phaser.Scene {
       summary: createClassicRunSummary(state, this.modeConfig, this.highScore),
       nextRunIndex: this.runIndex + 1,
       mode: "classic",
+      carCount: this.carCount,
       finalState: state,
       replay,
     });
+  }
+
+  private getActiveSides(carCount: SupportedClassicCarCount): RoadSide[] {
+    return getActiveRoadSides(carCount);
+  }
+
+  private getLaneX(carCount: SupportedClassicCarCount): Record<RoadSide, [number, number]> {
+    return carCount === 1 ? ONE_CAR_LANE_X : TWO_CAR_LANE_X;
   }
 }

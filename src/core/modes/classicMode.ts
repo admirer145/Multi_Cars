@@ -2,6 +2,9 @@ import {
   DEFAULT_OBJECT_SPEED,
   DEFAULT_SPAWN_INTERVAL_MS,
   DEFAULT_TRACK_DURATION_MS,
+  normalizeClassicCarCount,
+  SUPPORTED_CLASSIC_CAR_COUNTS,
+  type SupportedClassicCarCount,
 } from "../constants";
 import type { GameplayModifierSettings } from "../modifiers/gameplayModifiers";
 import type { ModeConfig, PatternEvent, PatternFamily, RunSummary, SimulationState } from "../types";
@@ -9,6 +12,7 @@ import { generatePattern } from "../patterns/patternGenerator";
 
 export const CLASSIC_MODE_ID = "classic";
 export const CLASSIC_SEED_PREFIX = "classic-v1";
+export const CLASSIC_CAR_OPTIONS = SUPPORTED_CLASSIC_CAR_COUNTS;
 export const MIN_CLASSIC_SPEED_LEVEL = 1;
 export const MAX_CLASSIC_SPEED_LEVEL = 50;
 export const DEFAULT_CLASSIC_SPEED_SETTINGS = {
@@ -23,6 +27,7 @@ export type ClassicSpeedSettings = {
 
 export type ClassicRun = {
   runIndex: number;
+  carCount: SupportedClassicCarCount;
   config: ModeConfig;
   pattern: PatternEvent[];
 };
@@ -38,6 +43,7 @@ type ClassicModeOptions = {
   durationMs?: number;
   speedSettings?: Partial<ClassicSpeedSettings>;
   modifierSettings?: GameplayModifierSettings;
+  carCount?: SupportedClassicCarCount;
 };
 
 export function createClassicMode(options: string | ClassicModeOptions = {}): ModeConfig {
@@ -45,11 +51,13 @@ export function createClassicMode(options: string | ClassicModeOptions = {}): Mo
   const runIndex = resolvedOptions.runIndex ?? 0;
   const difficulty = resolvedOptions.difficulty ?? getClassicStartingDifficulty(runIndex);
   const speedSettings = normalizeClassicSpeedSettings(resolvedOptions.speedSettings);
+  const carCount = normalizeClassicCarCount(resolvedOptions.carCount);
 
   return {
     id: CLASSIC_MODE_ID,
-    label: "Classic",
-    seed: resolvedOptions.seed ?? createClassicSeed(runIndex),
+    label: formatClassicModeLabel(carCount),
+    seed: resolvedOptions.seed ?? createClassicSeed(runIndex, carCount),
+    carCount,
     durationMs: resolvedOptions.durationMs ?? DEFAULT_TRACK_DURATION_MS,
     endless: true,
     spawnIntervalMs: DEFAULT_SPAWN_INTERVAL_MS,
@@ -66,17 +74,23 @@ export function createClassicRun(
   runIndex: number,
   speedSettings?: Partial<ClassicSpeedSettings>,
   modifierSettings?: GameplayModifierSettings,
+  carCount?: SupportedClassicCarCount,
 ): ClassicRun {
-  const config = createClassicMode({ runIndex, speedSettings, modifierSettings });
+  const resolvedCarCount = normalizeClassicCarCount(carCount);
+  const config = createClassicMode({ runIndex, speedSettings, modifierSettings, carCount: resolvedCarCount });
   return {
     runIndex,
+    carCount: resolvedCarCount,
     config,
     pattern: generatePattern(config),
   };
 }
 
-export function createClassicSeed(runIndex: number): string {
-  return `${CLASSIC_SEED_PREFIX}-run-${runIndex}`;
+export function createClassicSeed(runIndex: number, carCount: SupportedClassicCarCount = 2): string {
+  const normalizedCarCount = normalizeClassicCarCount(carCount);
+  return normalizedCarCount === 2
+    ? `${CLASSIC_SEED_PREFIX}-run-${runIndex}`
+    : `${CLASSIC_SEED_PREFIX}-${normalizedCarCount}-car-run-${runIndex}`;
 }
 
 export function getClassicSpeedLevel(
@@ -94,7 +108,7 @@ export function createClassicRunSummary(
 ): ClassicRunSummary {
   return {
     modeId: CLASSIC_MODE_ID,
-    modeLabel: "Classic",
+    modeLabel: config.label,
     seed: config.seed,
     score: state.score,
     bestScore,
@@ -104,6 +118,10 @@ export function createClassicRunSummary(
     failureReason: state.failure?.reason,
     failedPatternFamily: state.failure?.patternFamily,
   };
+}
+
+export function formatClassicModeLabel(carCount: SupportedClassicCarCount): string {
+  return carCount === 1 ? "Classic 1 Car" : "Classic 2 Cars";
 }
 
 export function normalizeClassicSpeedSettings(

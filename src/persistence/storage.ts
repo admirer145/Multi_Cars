@@ -1,4 +1,5 @@
 import type { ChallengeProgress } from "../core/modes/challengeMode";
+import type { SupportedClassicCarCount } from "../core/constants";
 import {
   createInitialAchievementState,
   normalizeCarSkinId,
@@ -36,6 +37,26 @@ export function saveClassicHighScore(score: number, storage: StorageLike = getBr
   const current = loadClassicHighScore(storage);
   if (score > current) {
     storage.setItem(HIGH_SCORE_KEY, String(score));
+  }
+}
+
+export function loadClassicHighScoreForCarCount(
+  carCount: SupportedClassicCarCount,
+  storage: StorageLike = getBrowserStorage(),
+): number {
+  const value = storage.getItem(getClassicHighScoreKey(carCount));
+  const parsed = value ? Number.parseInt(value, 10) : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function saveClassicHighScoreForCarCount(
+  score: number,
+  carCount: SupportedClassicCarCount,
+  storage: StorageLike = getBrowserStorage(),
+): void {
+  const current = loadClassicHighScoreForCarCount(carCount, storage);
+  if (score > current) {
+    storage.setItem(getClassicHighScoreKey(carCount), String(score));
   }
 }
 
@@ -193,4 +214,8 @@ export function saveSelectedCarSkin(
 
 function getBrowserStorage(): StorageLike {
   return window.localStorage;
+}
+
+function getClassicHighScoreKey(carCount: SupportedClassicCarCount): string {
+  return carCount === 2 ? HIGH_SCORE_KEY : `${HIGH_SCORE_KEY}:${carCount}-car`;
 }

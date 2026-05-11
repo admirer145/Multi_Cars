@@ -89,6 +89,18 @@ describe("game simulation", () => {
     expect(state.cars.right).toEqual({ side: "right", lane: 0 });
   });
 
+  it("keeps one-car runs scoped to the primary car", () => {
+    const simulation = new GameSimulation({ ...baseConfig, carCount: 1 }, []);
+
+    simulation.applyInput({ type: "TOGGLE_RIGHT", atMs: 0 });
+    simulation.applyInput({ type: "TOGGLE_LEFT", atMs: 0 });
+    const state = simulation.getState();
+
+    expect(state.carCount).toBe(1);
+    expect(state.cars.left).toEqual({ side: "left", lane: 1 });
+    expect(state.cars.right).toEqual({ side: "right", lane: 1 });
+  });
+
   it("does not advance simulation time while paused", () => {
     const simulation = new GameSimulation(baseConfig, []);
 

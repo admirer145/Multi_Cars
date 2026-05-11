@@ -1,12 +1,12 @@
 # Multi Cars
 
-A focused offline browser game inspired by Two Cars. The player controls two cars at the same time, switches each car between two lanes, collects required targets, and avoids obstacles. One missed collectible or one obstacle collision ends the run.
+A focused offline browser game inspired by Two Cars. Classic mode can now start with one car or two cars; each car switches between two lanes, collects required targets, and avoids obstacles. One missed collectible or one obstacle collision ends the run.
 
 The current build is a playable prototype with a React/Tailwind app shell and a Phaser gameplay canvas. The design goal is to improve concentration, accurate decision-making, two-hand coordination, and pattern recognition without weakening the original difficulty.
 
 ## Current State
 
-- Classic mode is playable as an endless run.
+- Classic mode is playable as an endless run with 1-car and 2-car options.
 - Challenge Roads are playable as finite authored tracks with categories, locked levels, progress, and stars.
 - Practice Drills are playable as finite focused drills without high-score or Challenge progress writes.
 - Daily Road is playable as a date-seeded finite route with isolated local progress.
@@ -147,18 +147,17 @@ Progress, settings, achievements, selected car skin, Challenge progress, and Dai
 Latest documented verification:
 
 ```text
-npm run test      -> passed, 67 tests
+npm run test      -> passed, 69 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 35 browser tests, 7 expected project-specific skips
+npm run test:e2e  -> passed, 37 browser tests, 7 expected project-specific skips
 ```
 
 ## Next Planned Milestone
 
-The active next checkpoint is Polish And Device QA:
+The old Polish And Device QA milestone has been removed from the active roadmap. The product direction is now scalable Classic car counts:
 
-- Review mobile, tablet, and desktop layouts for overlap and readability.
-- Tighten motion, feedback, and gameplay presentation.
-- Confirm controls remain responsive across keyboard, pointer, and touch.
-- Document device-specific limitations.
+- Current: 1-car and 2-car Classic options.
+- Next direction: extend the model toward 3-car and 4-car Classic runs.
+- Keep generated patterns, input, summary, replay, and local progress scoped to the selected car count.
 
 See `docs/CHECKPOINTS.md` for the live checkpoint tracker.

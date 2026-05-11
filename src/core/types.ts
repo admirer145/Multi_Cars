@@ -1,4 +1,4 @@
-import type { LANES, ROAD_SIDES } from "./constants";
+import type { LANES, ROAD_SIDES, SupportedClassicCarCount } from "./constants";
 import type {
   GameplayModifierSettings,
   PowerUpId,
@@ -82,6 +82,7 @@ export type ModeConfig = {
   id: string;
   label: string;
   seed: string;
+  carCount?: SupportedClassicCarCount;
   durationMs: number;
   endless?: boolean;
   spawnIntervalMs: number;
@@ -102,6 +103,7 @@ export type PowerUpEffectState = {
 
 export type SimulationState = {
   timeMs: number;
+  carCount: SupportedClassicCarCount;
   cars: Record<RoadSide, CarState>;
   objects: ActiveObjectState[];
   score: number;

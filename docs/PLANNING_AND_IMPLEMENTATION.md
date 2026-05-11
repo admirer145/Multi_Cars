@@ -916,19 +916,19 @@ Acceptance:
 - Core assets load offline.
 - Save data remains local.
 
-### Milestone 11: Polish And Device QA
+### Future Classic Car Scaling
 
 Goal:
 
-- Polish visuals, motion, audio, and responsiveness.
-- Test mobile, tablet, and desktop viewports.
+- Expand Classic car-count selection beyond the current 1-car and 2-car options.
+- Support up to 4 cars once the renderer, input model, and generated pattern side model are extended.
 
 Acceptance:
 
-- No overlapping UI text.
-- Game is readable on small screens.
-- Input remains responsive.
-- Performance is stable on target devices.
+- Each car count has clear controls and readable lanes on target screens.
+- Existing 1-car and 2-car flows remain unchanged.
+- Generated patterns only target active cars.
+- Summary, replay, and local progress remain scoped to the selected car count.
 
 ## 17. Implementation Guardrails
 

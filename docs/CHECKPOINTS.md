@@ -4,11 +4,11 @@ This file tracks where the project currently stands against the implementation p
 
 ## Current Status
 
-Current checkpoint: **Milestone 10 - PWA And Offline Hardening**
+Current checkpoint: **Classic Car Count Selection**
 
-Status: **Completed PWA And Offline Hardening**
+Status: **Completed Classic Car Count Selection**
 
-The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, Daily Challenge has a date-seeded offline route, local achievements/cosmetic skins are in place, Control Room gates optional modifiers, failed runs can open a local non-interactive replay of the final mistake window, and the app can install/cache its shell for offline reloads after a first visit.
+The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless with 1-car and 2-car options, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, Daily Challenge has a date-seeded offline route, local achievements/cosmetic skins are in place, Control Room gates optional modifiers, failed runs can open a local non-interactive replay of the final mistake window, and the app can install/cache its shell for offline reloads after a first visit.
 
 ## Progress Summary
 
@@ -25,7 +25,10 @@ The basic playable version is working, the deterministic pattern foundation is i
 | 8. Engagement Layer | Done | Local achievements, cosmetic-only car skins, Garage surface, optional gameplay modifiers, summary unlock callouts, persistence, and tests are in place. |
 | 9. Replay Last Mistake | Done | Rolling replay capture, summary replay action, non-interactive replay overlay, unit tests, and browser coverage are in place. |
 | 10. PWA And Offline Hardening | Done | Manifest, install metadata, service worker shell caching, local-first offline reload coverage, and docs are in place. |
-| 11. Polish And Device QA | Not Started | Basic e2e viewport tests exist; visual polish and device QA remain. |
+
+## Current Product Direction
+
+Classic is moving toward scalable car-count selection. The first shipped step supports 1-car and 2-car Classic runs; future expansion can add 3-car and 4-car options once the renderer, input model, and pattern generator are extended beyond the current two active road groups.
 
 ## Completed Checkpoint Details
 
@@ -441,28 +444,31 @@ Verification:
 - `npm run build` passed.
 - `npm run test:e2e` passed with 35 tests and 7 expected project-specific skips.
 
-## Active Next Checkpoint
-
-### Milestone 11: Polish And Device QA
+### Classic Car Count Selection
 
 Goal:
 
-Polish visuals, motion, audio, responsiveness, and device fit now that the major playable systems are in place.
+Add a Classic run selection step that starts either a single-car two-lane run or the existing two-car four-lane run.
 
-Required work:
+Completed:
 
-- Review mobile, tablet, and desktop layouts for overlap, spacing, and readability.
-- Tighten motion, feedback, and gameplay presentation where it improves clarity.
-- Check install/standalone display behavior on supported devices where practical.
-- Keep controls responsive across keyboard, pointer, and touch profiles.
-- Document any device-specific limitations.
+- Added a Classic selection screen with 1-car and 2-car options.
+- Preserved the existing 2-car Classic flow, seed format, controls, four-lane renderer, and replay behavior.
+- Added 1-car Classic with one centered two-lane road, one visible car, full-canvas tap control, and single-key keyboard support.
+- Added car-count-aware Classic run config, generated patterns, simulation state, DOM status, replay drawing, and per-car-count Classic high score helpers.
+- Removed the previously planned Polish And Device QA milestone from the active roadmap.
 
-Acceptance checklist:
+Known limitations:
 
-- No overlapping UI text on target viewports.
-- Game is readable on small screens.
-- Input remains responsive.
-- Performance is stable on target devices.
+- Only 1-car and 2-car Classic options are currently selectable.
+- The core road-side model still has two active road groups; future 3-car and 4-car support will need the planned renderer/input/model expansion.
+- Challenge, Practice, and Daily remain on the existing two-car rules.
+
+Verification:
+
+- `npm run test` passed with 69 tests.
+- `npm run build` passed.
+- `npm run test:e2e` passed with 37 tests and 7 expected project-specific skips.
 
 ## Checkpoint Rules
 
@@ -483,12 +489,12 @@ Before moving to a new milestone:
 
 ## Latest Verification
 
-Last verified after PWA And Offline Hardening milestone:
+Last verified after Classic Car Count Selection:
 
 ```text
-npm run test      -> passed, 67 tests
+npm run test      -> passed, 69 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 35 browser tests, 7 expected project-specific skips
+npm run test:e2e  -> passed, 37 browser tests, 7 expected project-specific skips
 ```
 
 Current local dev URL:

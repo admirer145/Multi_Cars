@@ -44,6 +44,7 @@ describe("replay buffer", () => {
 function createState(timeMs: number, status: SimulationState["status"] = "running"): SimulationState {
   return {
     timeMs,
+    carCount: 2,
     cars: {
       left: { side: "left", lane: 0 },
       right: { side: "right", lane: 1 },

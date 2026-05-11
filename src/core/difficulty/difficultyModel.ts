@@ -8,7 +8,7 @@ import type { ModeConfig } from "../types";
 export { createClassicMode } from "../modes/classicMode";
 
 export function getSpeedAtTime(config: ModeConfig, timeMs: number): number {
-  if (config.id === CLASSIC_MODE_ID) {
+  if (config.id === CLASSIC_MODE_ID || config.speedLevelMin !== undefined || config.speedLevelMax !== undefined) {
     return config.objectSpeed + (getClassicSpeedLevel(timeMs, config) - 1) * 26;
   }
 

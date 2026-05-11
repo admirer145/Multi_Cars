@@ -73,14 +73,26 @@ const ROAD_THEME_COLORS = {
 };
 
 const TWO_CAR_LANE_X: Record<RoadSide, [number, number]> = {
-  left: [154, 270],
-  right: [450, 566],
+  left: [146, 282],
+  right: [438, 574],
 };
 const ONE_CAR_LANE_X: Record<RoadSide, [number, number]> = {
-  left: [302, 418],
-  right: [450, 566],
+  left: [252, 468],
+  right: [438, 574],
 };
 const EXTRA_TOUCH_POINTERS = 3;
+const LOW_SPEED_LANE_SWITCH_MS = 86;
+const MID_SPEED_LANE_SWITCH_MS = 64;
+const HIGH_SPEED_LANE_SWITCH_MS = 42;
+
+type VisualCarPose = {
+  currentX: number;
+  startX: number;
+  targetX: number;
+  lane: number;
+  animationStartedAtMs: number;
+  durationMs: number;
+};
 
 type GameplaySceneData = {
   mode?: "classic" | "challenge" | "practice" | "daily";
@@ -117,9 +129,9 @@ export class GameplayScene extends Phaser.Scene {
     left: 0x3dd6c6,
     right: 0xffd166,
   };
-  private visualCarPose: Record<RoadSide, { frontX: number; rearX: number }> = {
-    left: { frontX: TWO_CAR_LANE_X.left[0], rearX: TWO_CAR_LANE_X.left[0] },
-    right: { frontX: TWO_CAR_LANE_X.right[1], rearX: TWO_CAR_LANE_X.right[1] },
+  private visualCarPose: Record<RoadSide, VisualCarPose> = {
+    left: this.createVisualCarPose(TWO_CAR_LANE_X.left[0], 0),
+    right: this.createVisualCarPose(TWO_CAR_LANE_X.right[1], 1),
   };
 
   constructor() {
@@ -308,9 +320,10 @@ export class GameplayScene extends Phaser.Scene {
     this.practiceProgress = undefined;
     this.replayBuffer.reset();
     const modifierSettings = loadGameplayModifierSettings();
+    const speedSettings = loadClassicSpeedSettings();
 
     if (this.activeMode === "challenge") {
-      this.challengeRun = createChallengeRun(data.trackId);
+      this.challengeRun = createChallengeRun(data.trackId, speedSettings);
       this.challengeProgress = loadChallengeProgress(
         this.challengeRun.track.id,
         createInitialChallengeProgress(this.challengeRun.track.id),
@@ -318,7 +331,7 @@ export class GameplayScene extends Phaser.Scene {
       this.modeConfig = this.challengeRun.config;
       this.pattern = this.challengeRun.pattern;
     } else if (this.activeMode === "practice") {
-      this.practiceRun = createPracticeRun(data.drillId);
+      this.practiceRun = createPracticeRun(data.drillId, speedSettings);
       this.practiceProgress = loadPracticeProgress(
         this.practiceRun.drill.id,
         createInitialPracticeProgress(this.practiceRun.drill.id),
@@ -326,7 +339,7 @@ export class GameplayScene extends Phaser.Scene {
       this.modeConfig = this.practiceRun.config;
       this.pattern = this.practiceRun.pattern;
     } else if (this.activeMode === "daily") {
-      this.dailyRun = createDailyRun(new Date(), modifierSettings);
+      this.dailyRun = createDailyRun(new Date(), modifierSettings, speedSettings);
       this.dailyProgress = loadDailyProgress(
         this.dailyRun.dateKey,
         createInitialDailyProgress(this.dailyRun.dateKey),
@@ -334,7 +347,7 @@ export class GameplayScene extends Phaser.Scene {
       this.modeConfig = this.dailyRun.config;
       this.pattern = this.dailyRun.pattern;
     } else {
-      this.classicRun = createClassicRun(this.runIndex, loadClassicSpeedSettings(), modifierSettings, this.carCount);
+      this.classicRun = createClassicRun(this.runIndex, speedSettings, modifierSettings, this.carCount);
       this.modeConfig = this.classicRun.config;
       this.pattern = this.classicRun.pattern;
     }
@@ -343,14 +356,8 @@ export class GameplayScene extends Phaser.Scene {
     const initialState = this.simulation.getState();
     const laneX = this.getLaneX(initialState.carCount);
     this.visualCarPose = {
-      left: {
-        frontX: laneX.left[initialState.cars.left.lane],
-        rearX: laneX.left[initialState.cars.left.lane],
-      },
-      right: {
-        frontX: laneX.right[initialState.cars.right.lane],
-        rearX: laneX.right[initialState.cars.right.lane],
-      },
+      left: this.createVisualCarPose(laneX.left[initialState.cars.left.lane], initialState.cars.left.lane),
+      right: this.createVisualCarPose(laneX.right[initialState.cars.right.lane], initialState.cars.right.lane),
     };
     this.lastStatus = "ready";
     this.hasDispatchedEnd = false;
@@ -378,16 +385,16 @@ export class GameplayScene extends Phaser.Scene {
 
     if (activeSides.length === 1) {
       this.graphics.fillStyle(0x101827, 1);
-      this.graphics.fillRoundedRect(166, ROAD_TOP - 28, 388, GAME_HEIGHT - ROAD_TOP + 56, 22);
+      this.graphics.fillRoundedRect(96, ROAD_TOP - 28, 528, GAME_HEIGHT - ROAD_TOP + 56, 22);
       this.graphics.lineStyle(5, colors.edge, 0.55);
-      this.graphics.strokeRoundedRect(166, ROAD_TOP - 28, 388, GAME_HEIGHT - ROAD_TOP + 56, 22);
+      this.graphics.strokeRoundedRect(96, ROAD_TOP - 28, 528, GAME_HEIGHT - ROAD_TOP + 56, 22);
 
       this.graphics.fillStyle(colors.road, 1);
-      this.graphics.fillRoundedRect(238, ROAD_TOP - 22, 244, GAME_HEIGHT - ROAD_TOP + 44, 18);
+      this.graphics.fillRoundedRect(144, ROAD_TOP - 22, 432, GAME_HEIGHT - ROAD_TOP + 44, 18);
 
       this.graphics.fillStyle(0xffffff, 0.045);
-      this.graphics.fillRoundedRect(264, ROAD_TOP - 8, 88, GAME_HEIGHT - ROAD_TOP + 16, 12);
-      this.graphics.fillRoundedRect(384, ROAD_TOP - 8, 72, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(178, ROAD_TOP - 8, 152, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(390, ROAD_TOP - 8, 152, GAME_HEIGHT - ROAD_TOP + 16, 12);
     } else {
       this.graphics.fillStyle(0x101827, 1);
       this.graphics.fillRoundedRect(46, ROAD_TOP - 28, 628, GAME_HEIGHT - ROAD_TOP + 56, 22);
@@ -395,14 +402,14 @@ export class GameplayScene extends Phaser.Scene {
       this.graphics.strokeRoundedRect(46, ROAD_TOP - 28, 628, GAME_HEIGHT - ROAD_TOP + 56, 22);
 
       this.graphics.fillStyle(colors.road, 1);
-      this.graphics.fillRoundedRect(92, ROAD_TOP - 22, 244, GAME_HEIGHT - ROAD_TOP + 44, 18);
-      this.graphics.fillRoundedRect(384, ROAD_TOP - 22, 244, GAME_HEIGHT - ROAD_TOP + 44, 18);
+      this.graphics.fillRoundedRect(74, ROAD_TOP - 22, 280, GAME_HEIGHT - ROAD_TOP + 44, 18);
+      this.graphics.fillRoundedRect(366, ROAD_TOP - 22, 280, GAME_HEIGHT - ROAD_TOP + 44, 18);
 
       this.graphics.fillStyle(0xffffff, 0.045);
-      this.graphics.fillRoundedRect(118, ROAD_TOP - 8, 88, GAME_HEIGHT - ROAD_TOP + 16, 12);
-      this.graphics.fillRoundedRect(238, ROAD_TOP - 8, 72, GAME_HEIGHT - ROAD_TOP + 16, 12);
-      this.graphics.fillRoundedRect(410, ROAD_TOP - 8, 88, GAME_HEIGHT - ROAD_TOP + 16, 12);
-      this.graphics.fillRoundedRect(530, ROAD_TOP - 8, 72, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(94, ROAD_TOP - 8, 104, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(232, ROAD_TOP - 8, 100, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(386, ROAD_TOP - 8, 104, GAME_HEIGHT - ROAD_TOP + 16, 12);
+      this.graphics.fillRoundedRect(524, ROAD_TOP - 8, 100, GAME_HEIGHT - ROAD_TOP + 16, 12);
     }
 
     this.graphics.lineStyle(4, colors.lane, 0.76);
@@ -438,17 +445,58 @@ export class GameplayScene extends Phaser.Scene {
   private drawMovingCar(side: RoadSide, state: SimulationState, color: number): void {
     const targetX = this.getLaneX(state.carCount)[side][state.cars[side].lane];
     const pose = this.visualCarPose[side];
-    const frontBlend = 1 - Math.exp(-this.lastFrameDeltaMs / 18);
-    const rearBlend = 1 - Math.exp(-this.lastFrameDeltaMs / 32);
-    const nextFrontX = pose.frontX + (targetX - pose.frontX) * frontBlend;
-    const nextRearX = pose.rearX + (targetX - pose.rearX) * rearBlend;
-    pose.frontX = Math.abs(nextFrontX - targetX) < 0.45 ? targetX : nextFrontX;
-    pose.rearX = Math.abs(nextRearX - targetX) < 0.45 ? targetX : nextRearX;
+    this.updateVisualCarPose(pose, state.cars[side].lane, targetX, state);
 
-    const steering = Phaser.Math.Clamp((pose.frontX - pose.rearX) / 62, -0.55, 0.55);
+    const progress = Phaser.Math.Clamp((state.timeMs - pose.animationStartedAtMs) / pose.durationMs, 0, 1);
+    const easedProgress = 1 - Math.pow(1 - progress, 3);
+    pose.currentX = progress >= 1 ? pose.targetX : Phaser.Math.Linear(pose.startX, pose.targetX, easedProgress);
+
+    const laneDistance = Math.abs(this.getLaneX(state.carCount)[side][1] - this.getLaneX(state.carCount)[side][0]);
+    const steering = Phaser.Math.Clamp((pose.targetX - pose.currentX) / laneDistance, -0.45, 0.45);
     const bob = Math.sin((state.timeMs + (side === "left" ? 0 : 180)) / 82) * 2.4;
 
-    this.drawCar(pose.frontX, pose.rearX, COLLECTION_Y + bob, color, steering);
+    this.drawCar(pose.currentX, pose.currentX, COLLECTION_Y + bob, color, steering);
+  }
+
+  private createVisualCarPose(x: number, lane: number): VisualCarPose {
+    return {
+      currentX: x,
+      startX: x,
+      targetX: x,
+      lane,
+      animationStartedAtMs: 0,
+      durationMs: LOW_SPEED_LANE_SWITCH_MS,
+    };
+  }
+
+  private updateVisualCarPose(
+    pose: VisualCarPose,
+    lane: number,
+    targetX: number,
+    state: SimulationState,
+  ): void {
+    if (pose.lane === lane && pose.targetX === targetX) {
+      return;
+    }
+
+    pose.startX = pose.currentX;
+    pose.targetX = targetX;
+    pose.lane = lane;
+    pose.animationStartedAtMs = state.timeMs;
+    pose.durationMs = this.getLaneSwitchDurationMs(state);
+  }
+
+  private getLaneSwitchDurationMs(state: SimulationState): number {
+    const speedLevel = this.getDisplayedSpeedLevel(state);
+    if (speedLevel >= 26) {
+      return HIGH_SPEED_LANE_SWITCH_MS;
+    }
+
+    if (speedLevel >= 11) {
+      return MID_SPEED_LANE_SWITCH_MS;
+    }
+
+    return LOW_SPEED_LANE_SWITCH_MS;
   }
 
   private drawCar(frontX: number, rearX: number, y: number, color: number, steering: number): void {
@@ -476,49 +524,52 @@ export class GameplayScene extends Phaser.Scene {
 
     this.graphics.fillStyle(0x050b14, 0.72);
     this.drawClosedShape([
-      { x: frontX, y: noseY - 3 },
-      { x: frontX + 32, y: hoodY - 4 },
+      { x: frontX - 20, y: noseY - 6 },
+      { x: frontX + 20, y: noseY - 6 },
+      { x: frontX + 35, y: hoodY - 8 },
       { x: waistX + 43, y: waistY },
       { x: rearX + 46, y: rearY },
       { x: rearX - 46, y: rearY },
       { x: waistX - 43, y: waistY },
-      { x: frontX - 32, y: hoodY - 4 },
+      { x: frontX - 35, y: hoodY - 8 },
     ]);
 
     this.graphics.fillStyle(color, 1);
     this.drawClosedShape([
-      { x: frontX, y: noseY },
-      { x: frontX + 29, y: hoodY },
+      { x: frontX - 17, y: noseY },
+      { x: frontX + 17, y: noseY },
+      { x: frontX + 31, y: hoodY - 2 },
       { x: waistX + 36, y: waistY },
       { x: rearX + 40, y: rearY },
       { x: rearX - 40, y: rearY },
       { x: waistX - 36, y: waistY },
-      { x: frontX - 29, y: hoodY },
+      { x: frontX - 31, y: hoodY - 2 },
     ]);
 
     this.graphics.fillStyle(0xffffff, 0.16);
     this.drawClosedShape([
-      { x: hoodX - 31, y: hoodY + 3 },
-      { x: hoodX - 21, y: hoodY + 10 },
+      { x: hoodX - 30, y: hoodY + 2 },
+      { x: hoodX - 19, y: hoodY + 10 },
       { x: waistX - 33, y: waistY + 6 },
       { x: waistX - 39, y: waistY + 1 },
     ]);
     this.drawClosedShape([
-      { x: hoodX + 31, y: hoodY + 3 },
-      { x: hoodX + 21, y: hoodY + 10 },
+      { x: hoodX + 30, y: hoodY + 2 },
+      { x: hoodX + 19, y: hoodY + 10 },
       { x: waistX + 33, y: waistY + 6 },
       { x: waistX + 39, y: waistY + 1 },
     ]);
 
     this.graphics.fillStyle(0xffffff, 0.2);
     this.drawClosedShape([
-      { x: frontX, y: noseY + 10 },
-      { x: hoodX + 11, y: hoodY + 7 },
+      { x: frontX - 11, y: noseY + 8 },
+      { x: frontX + 11, y: noseY + 8 },
+      { x: hoodX + 15, y: hoodY + 7 },
       { x: waistX + 9, y: waistY - 3 },
       { x: centerX + 6, y: y + 35 },
       { x: centerX - 6, y: y + 35 },
       { x: waistX - 9, y: waistY - 3 },
-      { x: hoodX - 11, y: hoodY + 7 },
+      { x: hoodX - 15, y: hoodY + 7 },
     ]);
 
     this.graphics.fillStyle(0x0b1017, 0.72);
@@ -551,9 +602,23 @@ export class GameplayScene extends Phaser.Scene {
       { x: rearX + 43, y: rearY - 2 },
     ]);
 
-    this.graphics.fillStyle(0xffffff, 0.85);
-    this.graphics.fillTriangle(frontX - 17, noseY + 15, frontX - 6, noseY + 21, frontX - 24, noseY + 27);
-    this.graphics.fillTriangle(frontX + 17, noseY + 15, frontX + 6, noseY + 21, frontX + 24, noseY + 27);
+    this.graphics.fillStyle(0x050b14, 0.64);
+    this.graphics.fillRoundedRect(frontX - 19, noseY + 13, 38, 15, 5);
+    this.graphics.fillStyle(0xffffff, 0.88);
+    this.drawClosedShape([
+      { x: frontX - 31, y: noseY + 13 },
+      { x: frontX - 9, y: noseY + 16 },
+      { x: frontX - 16, y: noseY + 24 },
+      { x: frontX - 35, y: noseY + 21 },
+    ]);
+    this.drawClosedShape([
+      { x: frontX + 31, y: noseY + 13 },
+      { x: frontX + 9, y: noseY + 16 },
+      { x: frontX + 16, y: noseY + 24 },
+      { x: frontX + 35, y: noseY + 21 },
+    ]);
+    this.graphics.fillStyle(0x8bd3ff, 0.34);
+    this.graphics.fillRoundedRect(frontX - 13, noseY + 17, 26, 5, 3);
 
     this.drawWheel(hoodX - 39 + steering * 8, y - 34, wheelAngle);
     this.drawWheel(hoodX + 29 + steering * 8, y - 34, wheelAngle);
@@ -958,10 +1023,6 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private getDisplayedSpeedLevel(state: SimulationState): number {
-    if (this.activeMode !== "classic") {
-      return 1;
-    }
-
     return getClassicSpeedLevel(state.timeMs, this.modeConfig);
   }
 

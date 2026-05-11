@@ -85,6 +85,24 @@ describe("practice mode", () => {
     });
   });
 
+  it("uses Control Room speed settings for practice speed level", () => {
+    const run = createPracticeRun("left-hand-focus", { minLevel: 6, maxLevel: 8 });
+    const simulation = new GameSimulation(run.config, run.pattern);
+
+    simulation.step(1200);
+    const summary = createPracticeRunSummary(
+      simulation.getState(),
+      run.config,
+      createInitialPracticeProgress(run.drill.id),
+    );
+
+    expect(summary.speedLevel).toBe(6);
+    expect(run.config).toMatchObject({
+      speedLevelMin: 6,
+      speedLevelMax: 8,
+    });
+  });
+
   it("persists practice progress per drill", () => {
     const storage = createMemoryStorage();
     const progress = updatePracticeProgress(createInitialPracticeProgress("left-hand-focus"), 75, 9);

@@ -24,141 +24,215 @@ export type AuthoredTrack = {
 
 const ROUTE_CLEARANCE_MS = 3_200;
 
-export const AUTHORED_TRACKS: AuthoredTrack[] = [
-  {
-    id: "starter-focus-01",
-    label: "Focus Road I",
+export const AUTHORED_TRACKS: AuthoredTrack[] = createAuthoredTracks();
+
+function createAuthoredTracks(): AuthoredTrack[] {
+  const levels = [1, 2, 3, 4, 5];
+
+  return [
+    ...levels.map((level) => createFocusTrack(level)),
+    ...levels.map((level) => createCoordinationTrack(level)),
+    ...levels.map((level) => createRecognitionTrack(level)),
+    ...levels.map((level) => createReactionTrack(level)),
+    ...levels.map((level) => createEnduranceTrack(level)),
+  ];
+}
+
+function createFocusTrack(level: number): AuthoredTrack {
+  return {
+    id: level === 1 ? "starter-focus-01" : `focus-thread-${formatLevel(level)}`,
+    label: `Focus Road ${toRoman(level)}`,
     category: "focus",
-    level: 1,
-    description: "Clean lane reading with calm spacing.",
+    level,
+    description: level === 1
+      ? "Clean lane reading with calm spacing."
+      : "Longer focus chains with fewer recovery beats.",
     roadTheme: "city",
-    skillFocus: ["focus", "recovery"],
-    beatIntervalMs: 900,
-    events: [
-      { beat: 1, side: "left", lane: 0, kind: "collectible", family: "focus" },
-      { beat: 2, side: "right", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 3, side: "left", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 4, side: "right", lane: 0, kind: "collectible", family: "focus" },
-      { beat: 5, side: "left", lane: 0, kind: "obstacle", family: "recovery" },
-      { beat: 6, side: "right", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 7, side: "left", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 8, side: "right", lane: 0, kind: "obstacle", family: "recovery" },
-      { beat: 9, side: "left", lane: 0, kind: "collectible", family: "focus" },
-      { beat: 10, side: "right", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 11, side: "left", lane: 1, kind: "obstacle", family: "recovery" },
-      { beat: 12, side: "right", lane: 0, kind: "collectible", family: "focus" },
-    ],
-  },
-  {
-    id: "starter-mirror-01",
-    label: "Mirror Road I",
+    skillFocus: level >= 3 ? ["focus", "recovery", "deceptive"] : ["focus", "recovery"],
+    beatIntervalMs: Math.max(760, 920 - level * 34),
+    events: createFocusEvents(level),
+  };
+}
+
+function createCoordinationTrack(level: number): AuthoredTrack {
+  return {
+    id: level === 1 ? "starter-mirror-01" : level === 2 ? "coordination-cross-02" : `coordination-cross-${formatLevel(level)}`,
+    label: level === 1 ? "Mirror Road I" : `Cross Hands ${toRoman(level)}`,
     category: "coordination",
-    level: 1,
-    description: "Opposite-hand movement with steady rhythm.",
+    level,
+    description: level === 1
+      ? "Opposite-hand movement with steady rhythm."
+      : "Sync, mirror, and delayed hand patterns combine.",
     roadTheme: "neon",
-    skillFocus: ["mirror"],
-    beatIntervalMs: 920,
-    events: [
-      { beat: 1, side: "left", lane: 0, kind: "collectible", family: "mirror" },
-      { beat: 1, side: "right", lane: 1, kind: "collectible", family: "mirror" },
-      { beat: 2, side: "left", lane: 1, kind: "collectible", family: "mirror" },
-      { beat: 2, side: "right", lane: 0, kind: "collectible", family: "mirror" },
-      { beat: 3, side: "left", lane: 0, kind: "obstacle", family: "mirror" },
-      { beat: 3, side: "right", lane: 1, kind: "obstacle", family: "mirror" },
-      { beat: 4, side: "left", lane: 1, kind: "collectible", family: "mirror" },
-      { beat: 4, side: "right", lane: 0, kind: "collectible", family: "mirror" },
-    ],
-  },
-  {
-    id: "coordination-cross-02",
-    label: "Cross Hands II",
-    category: "coordination",
-    level: 2,
-    description: "Sync and mirror switches combine into longer hand patterns.",
-    roadTheme: "neon",
-    skillFocus: ["sync", "mirror", "delayed"],
-    beatIntervalMs: 840,
-    events: [
-      { beat: 1, side: "left", lane: 0, kind: "collectible", family: "sync" },
-      { beat: 1, side: "right", lane: 0, kind: "collectible", family: "sync" },
-      { beat: 2, side: "left", lane: 1, kind: "collectible", family: "mirror" },
-      { beat: 2, side: "right", lane: 0, kind: "collectible", family: "mirror" },
-      { beat: 3, side: "left", lane: 0, kind: "obstacle", family: "mirror" },
-      { beat: 3, side: "right", lane: 1, kind: "obstacle", family: "mirror" },
-      { beat: 4, side: "left", lane: 1, kind: "collectible", family: "delayed" },
-      { beat: 5, side: "right", lane: 1, kind: "collectible", family: "delayed" },
-      { beat: 6, side: "left", lane: 0, kind: "collectible", family: "sync" },
-      { beat: 6, side: "right", lane: 0, kind: "collectible", family: "sync" },
-    ],
-  },
-  {
-    id: "recognition-shift-01",
-    label: "Pattern Shift I",
+    skillFocus: level >= 3 ? ["sync", "mirror", "delayed"] : ["sync", "mirror"],
+    beatIntervalMs: Math.max(760, 940 - level * 34),
+    events: createCoordinationEvents(level),
+  };
+}
+
+function createRecognitionTrack(level: number): AuthoredTrack {
+  return {
+    id: level === 1 ? "recognition-shift-01" : `recognition-shift-${formatLevel(level)}`,
+    label: `Pattern Shift ${toRoman(level)}`,
     category: "recognition",
-    level: 1,
-    description: "A repeated rhythm changes before it becomes automatic.",
+    level,
+    description: "Repeated rhythms change before they become automatic.",
     roadTheme: "storm",
-    skillFocus: ["deceptive", "alternating"],
-    beatIntervalMs: 860,
-    events: [
-      { beat: 1, side: "left", lane: 0, kind: "collectible", family: "deceptive" },
-      { beat: 2, side: "right", lane: 0, kind: "collectible", family: "deceptive" },
-      { beat: 3, side: "left", lane: 0, kind: "collectible", family: "deceptive" },
-      { beat: 4, side: "right", lane: 1, kind: "collectible", family: "deceptive" },
-      { beat: 5, side: "left", lane: 1, kind: "obstacle", family: "deceptive" },
-      { beat: 6, side: "right", lane: 0, kind: "collectible", family: "alternating" },
-      { beat: 7, side: "left", lane: 1, kind: "collectible", family: "alternating" },
-      { beat: 8, side: "right", lane: 1, kind: "obstacle", family: "deceptive" },
-      { beat: 9, side: "left", lane: 0, kind: "collectible", family: "deceptive" },
-    ],
-  },
-  {
-    id: "reaction-gate-01",
-    label: "Reaction Gate I",
+    skillFocus: level >= 4 ? ["deceptive", "alternating", "delayed"] : ["deceptive", "alternating"],
+    beatIntervalMs: Math.max(740, 890 - level * 34),
+    events: createRecognitionEvents(level),
+  };
+}
+
+function createReactionTrack(level: number): AuthoredTrack {
+  return {
+    id: level === 1 ? "reaction-gate-01" : `reaction-gate-${formatLevel(level)}`,
+    label: `Reaction Gate ${toRoman(level)}`,
     category: "reaction",
-    level: 1,
+    level,
     description: "Faster decisions with short recovery windows.",
     roadTheme: "canyon",
-    skillFocus: ["pressure", "recovery"],
-    beatIntervalMs: 790,
-    events: [
-      { beat: 1, side: "left", lane: 0, kind: "collectible", family: "pressure" },
-      { beat: 1, side: "right", lane: 1, kind: "collectible", family: "pressure" },
-      { beat: 2, side: "left", lane: 1, kind: "collectible", family: "pressure" },
-      { beat: 2, side: "right", lane: 0, kind: "obstacle", family: "pressure" },
-      { beat: 3, side: "left", lane: 0, kind: "obstacle", family: "pressure" },
-      { beat: 3, side: "right", lane: 1, kind: "collectible", family: "pressure" },
-      { beat: 4, side: "left", lane: 1, kind: "collectible", family: "pressure" },
-      { beat: 4, side: "right", lane: 0, kind: "collectible", family: "pressure" },
-      { beat: 5, side: "left", lane: 0, kind: "collectible", family: "recovery" },
-      { beat: 6, side: "right", lane: 1, kind: "collectible", family: "recovery" },
-    ],
-  },
-  {
-    id: "focus-thread-02",
-    label: "Focus Thread II",
-    category: "focus",
-    level: 2,
-    description: "Longer focus chain with fewer recovery beats.",
-    roadTheme: "city",
-    skillFocus: ["focus", "deceptive"],
-    beatIntervalMs: 820,
-    events: [
-      { beat: 1, side: "left", lane: 0, kind: "collectible", family: "focus" },
-      { beat: 2, side: "right", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 3, side: "left", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 4, side: "right", lane: 0, kind: "collectible", family: "deceptive" },
-      { beat: 5, side: "left", lane: 0, kind: "obstacle", family: "deceptive" },
-      { beat: 6, side: "right", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 7, side: "left", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 8, side: "right", lane: 0, kind: "collectible", family: "deceptive" },
-      { beat: 9, side: "left", lane: 0, kind: "collectible", family: "focus" },
-      { beat: 10, side: "right", lane: 1, kind: "obstacle", family: "deceptive" },
-      { beat: 11, side: "left", lane: 1, kind: "collectible", family: "focus" },
-      { beat: 12, side: "right", lane: 0, kind: "collectible", family: "focus" },
-    ],
-  },
-];
+    skillFocus: level >= 3 ? ["pressure", "recovery", "alternating"] : ["pressure", "recovery"],
+    beatIntervalMs: Math.max(700, 820 - level * 28),
+    events: createReactionEvents(level),
+  };
+}
+
+function createEnduranceTrack(level: number): AuthoredTrack {
+  return {
+    id: `endurance-run-${formatLevel(level)}`,
+    label: `Endurance Run ${toRoman(level)}`,
+    category: "endurance",
+    level,
+    description: "Sustain attention across longer mixed-pattern runs.",
+    roadTheme: level % 2 === 0 ? "storm" : "city",
+    skillFocus: level >= 4 ? ["focus", "sync", "pressure", "recovery"] : ["focus", "sync", "recovery"],
+    beatIntervalMs: Math.max(780, 940 - level * 24),
+    events: createEnduranceEvents(level),
+  };
+}
+
+function createFocusEvents(level: number): AuthoredEventSpec[] {
+  const count = 10 + level * 2;
+  return Array.from({ length: count }, (_, index) => {
+    const beat = index + 1;
+    const side = beat % 2 === 1 ? "left" : "right";
+    const obstacleBeat = level >= 2 && beat % Math.max(4, 7 - level) === 0;
+    return {
+      beat,
+      side,
+      lane: ((beat + Math.floor(beat / 3) + level) % 2) as LaneIndex,
+      kind: obstacleBeat ? "obstacle" : "collectible",
+      family: obstacleBeat ? (level >= 3 ? "deceptive" : "recovery") : "focus",
+    };
+  });
+}
+
+function createCoordinationEvents(level: number): AuthoredEventSpec[] {
+  const beats = 5 + level;
+  const events: AuthoredEventSpec[] = [];
+
+  for (let beat = 1; beat <= beats; beat += 1) {
+    const lane = (beat + level) % 2 as LaneIndex;
+    const family: PatternFamily = beat % 3 === 0 && level >= 3 ? "delayed" : beat % 2 === 0 ? "sync" : "mirror";
+    const rightLane = family === "sync" ? lane : invertLane(lane);
+    const kind: ObjectKind = level >= 2 && beat % 4 === 0 ? "obstacle" : "collectible";
+
+    events.push({ beat, side: "left", lane, kind, family });
+    events.push({ beat: family === "delayed" ? beat + 0.52 : beat, side: "right", lane: rightLane, kind, family });
+  }
+
+  return events;
+}
+
+function createRecognitionEvents(level: number): AuthoredEventSpec[] {
+  const count = 9 + level * 2;
+  return Array.from({ length: count }, (_, index) => {
+    const beat = index + 1;
+    const family: PatternFamily = beat % 5 === 0 && level >= 4 ? "delayed" : beat % 3 === 0 ? "alternating" : "deceptive";
+    const side = beat % 2 === 1 ? "left" : "right";
+    const repeatedLane = beat % 4 < 2 ? 0 : 1;
+    return {
+      beat,
+      side,
+      lane: (family === "alternating" ? (beat + level) % 2 : repeatedLane) as LaneIndex,
+      kind: level >= 2 && beat % 6 === 0 ? "obstacle" : "collectible",
+      family,
+    };
+  });
+}
+
+function createReactionEvents(level: number): AuthoredEventSpec[] {
+  const beats = 6 + level;
+  const events: AuthoredEventSpec[] = [];
+
+  for (let beat = 1; beat <= beats; beat += 1) {
+    const leftLane = (beat + level) % 2 as LaneIndex;
+    const rightLane = invertLane(leftLane);
+    const paired = beat % 2 === 1 || level >= 4;
+    const obstacleSide: RoadSide = beat % 3 === 0 ? "left" : "right";
+
+    events.push({
+      beat,
+      side: "left",
+      lane: leftLane,
+      kind: level >= 2 && obstacleSide === "left" && beat % 3 === 0 ? "obstacle" : "collectible",
+      family: beat % 5 === 0 ? "recovery" : "pressure",
+    });
+
+    if (paired) {
+      events.push({
+        beat,
+        side: "right",
+        lane: rightLane,
+        kind: level >= 2 && obstacleSide === "right" && beat % 3 === 0 ? "obstacle" : "collectible",
+        family: beat % 5 === 0 ? "recovery" : "pressure",
+      });
+    }
+  }
+
+  return events;
+}
+
+function createEnduranceEvents(level: number): AuthoredEventSpec[] {
+  const count = 12 + level * 3;
+  const events: AuthoredEventSpec[] = [];
+
+  for (let beat = 1; beat <= count; beat += 1) {
+    const family: PatternFamily =
+      beat % 8 === 0 && level >= 4 ? "pressure" : beat % 5 === 0 ? "sync" : beat % 6 === 0 ? "recovery" : "focus";
+    const lane = (beat + Math.floor(beat / 2) + level) % 2 as LaneIndex;
+    const kind: ObjectKind = level >= 3 && beat % 7 === 0 ? "obstacle" : "collectible";
+
+    if (family === "sync") {
+      events.push({ beat, side: "left", lane, kind, family });
+      events.push({ beat, side: "right", lane, kind, family });
+      continue;
+    }
+
+    events.push({
+      beat,
+      side: beat % 2 === 0 ? "right" : "left",
+      lane,
+      kind,
+      family,
+    });
+  }
+
+  return events;
+}
+
+function invertLane(lane: LaneIndex): LaneIndex {
+  return lane === 0 ? 1 : 0;
+}
+
+function formatLevel(level: number): string {
+  return String(level).padStart(2, "0");
+}
+
+function toRoman(level: number): string {
+  return ["I", "II", "III", "IV", "V"][level - 1] ?? String(level);
+}
 
 export function getAuthoredTrack(trackId: string): AuthoredTrack | undefined {
   return AUTHORED_TRACKS.find((track) => track.id === trackId);

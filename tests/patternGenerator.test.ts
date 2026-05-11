@@ -79,7 +79,7 @@ describe("pattern generation", () => {
   it("builds valid authored starter tracks", () => {
     const config = {
       ...createClassicMode("authored"),
-      durationMs: 20_000,
+      durationMs: 140_000,
       endless: false,
     };
 

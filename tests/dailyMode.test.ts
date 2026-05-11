@@ -71,6 +71,21 @@ describe("daily mode", () => {
       stars: 1,
     });
   });
+
+  it("uses Control Room speed settings for daily speed level", () => {
+    const run = createDailyRun(new Date(2026, 4, 11), undefined, { minLevel: 8, maxLevel: 10 });
+    const simulation = new GameSimulation(run.config, run.pattern);
+
+    simulation.step(1200);
+    const progress = createInitialDailyProgress(run.dateKey);
+    const summary = createDailyRunSummary(simulation.getState(), run.config, progress);
+
+    expect(summary.speedLevel).toBe(8);
+    expect(run.config).toMatchObject({
+      speedLevelMin: 8,
+      speedLevelMax: 10,
+    });
+  });
 });
 
 describe("daily progress storage", () => {

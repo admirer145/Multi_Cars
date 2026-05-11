@@ -8,7 +8,7 @@ Current checkpoint: **Classic Car Count Selection**
 
 Status: **Completed Classic Car Count Selection**
 
-The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless with 1-car and 2-car options, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, Daily Challenge has a date-seeded offline route, local achievements/cosmetic skins are in place, Control Room gates optional modifiers, failed runs can open a local non-interactive replay of the final mistake window, and the app can install/cache its shell for offline reloads after a first visit.
+The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless with 1-car and 2-car options, Challenge mode has 25 categorized roads with level progression, Practice mode has focused deterministic drills, Daily Challenge has a date-seeded offline route, local achievements/cosmetic skins are in place, Control Room gates optional modifiers and speed settings for all modes, failed runs can open a local non-interactive replay of the final mistake window, and the app can install/cache its shell for offline reloads after a first visit.
 
 ## Progress Summary
 
@@ -19,7 +19,7 @@ The basic playable version is working, the deterministic pattern foundation is i
 | 2. Deterministic Pattern Engine | Done | Named pattern families, validation, authored track foundation, metadata, and safety tests are in place. |
 | 3. Classic Mode | Done | Stable Classic run factory, deterministic restart seeds, speed level display, clearer failure summary, and mode tests are in place. |
 | 4. Menu And UX Foundation | Done | Menu, Classic start flow, settings entry, pause-to-menu flow, summary scene foundation, and navigation tests are in place. |
-| 5. Challenge Mode | Done | Starter authored Challenge track, progress/stars logic, local progress storage, menu entry, gameplay routing, summary routing, and tests are in place. |
+| 5. Challenge Mode | Done | Twenty-five authored Challenge tracks, progress/stars logic, local progress storage, menu entry, gameplay routing, summary routing, and tests are in place. |
 | 6. Practice Mode | Done | Focused deterministic drills, Practice menu flow, gameplay routing, summary/replay, local best progress, and tests are in place. |
 | 7. Daily Challenge | Done | Date-seeded Daily route, local daily progress, home entry, gameplay routing, summary/replay, and tests are in place. |
 | 8. Engagement Layer | Done | Local achievements, cosmetic-only car skins, Garage surface, optional gameplay modifiers, summary unlock callouts, persistence, and tests are in place. |
@@ -385,7 +385,7 @@ Completed:
 - Added Garage screen with achievements and car skins.
 - Added summary unlock callouts for newly earned achievements and cosmetic rewards.
 - Applied selected car skin colors to gameplay cars without changing speed, hitboxes, lives, scoring, or fail conditions.
-- Added Control Room toggles for shield, slow motion, magnet, score multiplier, dual collect, moving obstacles, fake collectibles, timed gates, and color matching. Shield is default-on; the rest are opt-in.
+- Added Control Room speed settings across Classic, Challenge, Practice, and Daily, plus toggles for shield, slow motion, magnet, score multiplier, dual collect, moving obstacles, fake collectibles, timed gates, and color matching. Shield is default-on; the rest are opt-in.
 - Added deterministic modifier decoration for generated Classic/Daily roads, plus simulation behavior for active power-up effects and advanced hazard/collectible variants.
 - Added unit tests for achievement unlocks, locked/unlocked skin normalization, and persistence.
 - Added unit tests for modifier defaults, persistence, generated-road decoration, shield, fake-collectible shielding, magnet safety, wrong-color traps, and score multiplier behavior.
@@ -493,9 +493,9 @@ Before moving to a new milestone:
 Last verified after Classic Car Count Selection:
 
 ```text
-npm run test      -> passed, 71 tests
+npm run test      -> passed, 76 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 37 browser tests, 7 expected project-specific skips
+npm run test:e2e  -> passed, 39 browser tests, 7 expected project-specific skips
 ```
 
 Current local dev URL:

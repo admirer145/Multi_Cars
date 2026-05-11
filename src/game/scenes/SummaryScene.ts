@@ -9,8 +9,8 @@ const PANEL_COLOR = 0x171d27;
 const PRIMARY_COLOR = 0x3dd6c6;
 const SECONDARY_TEXT_COLOR = "#ffd166";
 const LANE_X: Record<RoadSide, [number, number]> = {
-  left: [154, 270],
-  right: [450, 566],
+  left: [146, 282],
+  right: [438, 574],
 };
 
 export type SummarySceneData = {
@@ -97,8 +97,8 @@ export class SummaryScene extends Phaser.Scene {
     graphics.fillStyle(0x0b1017, 1);
     graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     graphics.fillStyle(0x202938, 1);
-    graphics.fillRoundedRect(92, -24, 244, GAME_HEIGHT + 48, 18);
-    graphics.fillRoundedRect(384, -24, 244, GAME_HEIGHT + 48, 18);
+    graphics.fillRoundedRect(74, -24, 280, GAME_HEIGHT + 48, 18);
+    graphics.fillRoundedRect(366, -24, 280, GAME_HEIGHT + 48, 18);
     graphics.lineStyle(4, 0x94a3b8, 0.55);
     graphics.lineBetween(214, 0, 214, GAME_HEIGHT);
     graphics.lineBetween(506, 0, 506, GAME_HEIGHT);

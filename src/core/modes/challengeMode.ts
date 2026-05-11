@@ -1,5 +1,10 @@
 import { DEFAULT_OBJECT_SPEED, DEFAULT_SPAWN_INTERVAL_MS } from "../constants";
 import {
+  getClassicSpeedLevel,
+  normalizeClassicSpeedSettings,
+  type ClassicSpeedSettings,
+} from "./classicMode";
+import {
   AUTHORED_TRACKS,
   buildAuthoredPattern,
   getAuthoredTrack,
@@ -27,7 +32,12 @@ export function getStarterChallengeTrack(): AuthoredTrack {
   return AUTHORED_TRACKS[0];
 }
 
-export function createChallengeMode(track: AuthoredTrack): ModeConfig {
+export function createChallengeMode(
+  track: AuthoredTrack,
+  speedSettings?: Partial<ClassicSpeedSettings>,
+): ModeConfig {
+  const normalizedSpeedSettings = normalizeClassicSpeedSettings(speedSettings);
+
   return {
     id: CHALLENGE_MODE_ID,
     label: track.label,
@@ -36,18 +46,23 @@ export function createChallengeMode(track: AuthoredTrack): ModeConfig {
     spawnIntervalMs: DEFAULT_SPAWN_INTERVAL_MS,
     objectSpeed: DEFAULT_OBJECT_SPEED,
     difficulty: 1,
+    speedLevelMin: normalizedSpeedSettings.minLevel,
+    speedLevelMax: normalizedSpeedSettings.maxLevel,
     allowedFamilies: track.skillFocus,
   };
 }
 
-export function createChallengeRun(trackId = getStarterChallengeTrack().id): ChallengeRun {
+export function createChallengeRun(
+  trackId = getStarterChallengeTrack().id,
+  speedSettings?: Partial<ClassicSpeedSettings>,
+): ChallengeRun {
   const track = getAuthoredTrack(trackId);
 
   if (!track) {
     throw new Error(`Unknown challenge track: ${trackId}`);
   }
 
-  const config = createChallengeMode(track);
+  const config = createChallengeMode(track, speedSettings);
   return {
     track,
     config,
@@ -109,7 +124,7 @@ export function createChallengeRunSummary(
     score: completedPercent,
     bestScore: progress.bestPercent,
     completedPercent,
-    speedLevel: 1,
+    speedLevel: getClassicSpeedLevel(state.timeMs, config),
     result: state.status,
     failureReason: state.failure?.reason,
     failedPatternFamily: state.failure?.patternFamily,

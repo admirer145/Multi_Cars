@@ -1,5 +1,10 @@
 import { DEFAULT_OBJECT_SPEED, DEFAULT_SPAWN_INTERVAL_MS } from "../constants";
 import type { GameplayModifierSettings } from "../modifiers/gameplayModifiers";
+import {
+  getClassicSpeedLevel,
+  normalizeClassicSpeedSettings,
+  type ClassicSpeedSettings,
+} from "./classicMode";
 import { generatePattern } from "../patterns/patternGenerator";
 import { createDailySeed } from "../patterns/dailySeed";
 import type { ModeConfig, PatternEvent, PatternFamily, RunSummary, SimulationState } from "../types";
@@ -22,8 +27,13 @@ export type DailyProgress = {
   attempts: number;
 };
 
-export function createDailyMode(date = new Date(), modifierSettings?: GameplayModifierSettings): ModeConfig {
+export function createDailyMode(
+  date = new Date(),
+  modifierSettings?: GameplayModifierSettings,
+  speedSettings?: Partial<ClassicSpeedSettings>,
+): ModeConfig {
   const seed = createDailySeed(date);
+  const normalizedSpeedSettings = normalizeClassicSpeedSettings(speedSettings);
 
   return {
     id: DAILY_MODE_ID,
@@ -33,13 +43,19 @@ export function createDailyMode(date = new Date(), modifierSettings?: GameplayMo
     spawnIntervalMs: DEFAULT_SPAWN_INTERVAL_MS,
     objectSpeed: DEFAULT_OBJECT_SPEED,
     difficulty: getDailyDifficulty(date),
+    speedLevelMin: normalizedSpeedSettings.minLevel,
+    speedLevelMax: normalizedSpeedSettings.maxLevel,
     allowedFamilies: getDailyFamilies(date),
     modifierSettings,
   };
 }
 
-export function createDailyRun(date = new Date(), modifierSettings?: GameplayModifierSettings): DailyRun {
-  const config = createDailyMode(date, modifierSettings);
+export function createDailyRun(
+  date = new Date(),
+  modifierSettings?: GameplayModifierSettings,
+  speedSettings?: Partial<ClassicSpeedSettings>,
+): DailyRun {
+  const config = createDailyMode(date, modifierSettings, speedSettings);
 
   return {
     dateKey: config.seed,
@@ -108,7 +124,7 @@ export function createDailyRunSummary(
     score: state.score,
     bestScore: progress.bestScore,
     completedPercent,
-    speedLevel: 1,
+    speedLevel: getClassicSpeedLevel(state.timeMs, config),
     result: state.status,
     failureReason: state.failure?.reason,
     failedPatternFamily: state.failure?.patternFamily,

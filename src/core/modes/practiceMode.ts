@@ -2,6 +2,11 @@ import {
   DEFAULT_OBJECT_SPEED,
   DEFAULT_SPAWN_INTERVAL_MS,
 } from "../constants";
+import {
+  getClassicSpeedLevel,
+  normalizeClassicSpeedSettings,
+  type ClassicSpeedSettings,
+} from "./classicMode";
 import { assertValidPattern } from "../patterns/patternValidation";
 import { PATTERN_FAMILIES } from "../patterns/patternTypes";
 import type {
@@ -157,7 +162,12 @@ export function getStarterPracticeDrill(): PracticeDrill {
   return PRACTICE_DRILLS[0];
 }
 
-export function createPracticeMode(drill: PracticeDrill): ModeConfig {
+export function createPracticeMode(
+  drill: PracticeDrill,
+  speedSettings?: Partial<ClassicSpeedSettings>,
+): ModeConfig {
+  const normalizedSpeedSettings = normalizeClassicSpeedSettings(speedSettings);
+
   return {
     id: PRACTICE_MODE_ID,
     label: drill.label,
@@ -166,18 +176,23 @@ export function createPracticeMode(drill: PracticeDrill): ModeConfig {
     spawnIntervalMs: DEFAULT_SPAWN_INTERVAL_MS,
     objectSpeed: DEFAULT_OBJECT_SPEED,
     difficulty: 1,
+    speedLevelMin: normalizedSpeedSettings.minLevel,
+    speedLevelMax: normalizedSpeedSettings.maxLevel,
     allowedFamilies: Array.from(new Set(drill.events.map((event) => event.family))),
   };
 }
 
-export function createPracticeRun(drillId = getStarterPracticeDrill().id): PracticeRun {
+export function createPracticeRun(
+  drillId = getStarterPracticeDrill().id,
+  speedSettings?: Partial<ClassicSpeedSettings>,
+): PracticeRun {
   const drill = getPracticeDrill(drillId);
 
   if (!drill) {
     throw new Error(`Unknown practice drill: ${drillId}`);
   }
 
-  const config = createPracticeMode(drill);
+  const config = createPracticeMode(drill, speedSettings);
   return {
     drill,
     config,
@@ -198,7 +213,7 @@ export function createPracticeRunSummary(
     score: state.score,
     bestScore: progress.bestPercent,
     completedPercent,
-    speedLevel: 1,
+    speedLevel: getClassicSpeedLevel(state.timeMs, config),
     result: state.status,
     failureReason: state.failure?.reason,
     failedPatternFamily: state.failure?.patternFamily,

@@ -75,7 +75,7 @@ test("starts Challenge from road selection", async ({ page }) => {
 
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "challenge-select");
-  await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await page.getByRole("button", { name: "Focus / Level 1 Focus Road I" }).click();
 
   await expect(page.locator("canvas")).toBeVisible();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
@@ -111,7 +111,7 @@ test("routes Challenge failure to the React summary overlay", async ({ page }) =
   await page.goto("/");
 
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
-  await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await page.getByRole("button", { name: "Focus / Level 1 Focus Road I" }).click();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
 
   await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
@@ -133,7 +133,7 @@ test("summary Back returns to Challenge road selection", async ({ page }) => {
   await page.goto("/");
 
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
-  await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await page.getByRole("button", { name: "Focus / Level 1 Focus Road I" }).click();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
   await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
   await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
@@ -149,7 +149,7 @@ test("opens replay last mistake from summary without leaving summary", async ({ 
   await page.goto("/");
 
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
-  await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await page.getByRole("button", { name: "Focus / Level 1 Focus Road I" }).click();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
   await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
   await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
@@ -185,7 +185,7 @@ test("browser back follows the same route from summary to selection", async ({ p
   await page.goto("/");
 
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
-  await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await page.getByRole("button", { name: "Focus / Level 1 Focus Road I" }).click();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
   await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
   await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
@@ -202,7 +202,7 @@ test("R replays from summary and dismisses the overlay", async ({ page }, testIn
   await page.goto("/");
 
   await page.getByRole("button", { name: /Challenge Roads/ }).click();
-  await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await page.getByRole("button", { name: "Focus / Level 1 Focus Road I" }).click();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
   await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
   await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
@@ -253,6 +253,31 @@ test("classic speed settings persist and affect gameplay", async ({ page }) => {
 
   await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
   await expect(page.locator("body")).toHaveAttribute("data-speed-level", "3");
+});
+
+test("Control Room speed settings affect Challenge Practice and Daily", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Control Room/ }).click();
+  await page.getByLabel("Minimum level").selectOption("4");
+  await page.getByLabel("Maximum level").selectOption("6");
+  await page.getByRole("button").first().click();
+
+  await page.getByRole("button", { name: /Challenge Roads/ }).click();
+  await page.getByRole("button", { name: "Focus / Level 1 Focus Road I" }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await expect(page.locator("body")).toHaveAttribute("data-speed-level", "4");
+
+  await page.reload();
+  await page.getByRole("button", { name: /Practice Drills/ }).click();
+  await page.getByRole("button", { name: /Left Hand Focus/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-mode", "practice");
+  await expect(page.locator("body")).toHaveAttribute("data-speed-level", "4");
+
+  await page.reload();
+  await page.getByRole("button", { name: /Daily Road/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-mode", "daily");
+  await expect(page.locator("body")).toHaveAttribute("data-speed-level", "4");
 });
 
 test("reloads the cached app shell offline with local settings intact", async ({ page, context }) => {

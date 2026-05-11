@@ -6,6 +6,7 @@ import {
   createInitialChallengeProgress,
   updateChallengeProgress,
 } from "../src/core/modes/challengeMode";
+import { AUTHORED_TRACKS, getAuthoredTracksByCategory } from "../src/core/patterns/authoredTracks";
 import { GameSimulation } from "../src/core/rules/simulation";
 import {
   loadChallengeProgress,
@@ -14,6 +15,14 @@ import {
 } from "../src/persistence/storage";
 
 describe("challenge mode", () => {
+  it("defines five levels for each challenge category", () => {
+    expect(AUTHORED_TRACKS).toHaveLength(25);
+
+    for (const category of ["focus", "coordination", "recognition", "reaction", "endurance"] as const) {
+      expect(getAuthoredTracksByCategory(category).map((track) => track.level)).toEqual([1, 2, 3, 4, 5]);
+    }
+  });
+
   it("creates deterministic authored challenge runs", () => {
     const first = createChallengeRun("starter-focus-01");
     const second = createChallengeRun("starter-focus-01");
@@ -61,6 +70,21 @@ describe("challenge mode", () => {
       completedPercent: 55,
       bestScore: 82,
       stars: 1,
+    });
+  });
+
+  it("uses Control Room speed settings for challenge speed level", () => {
+    const run = createChallengeRun("starter-focus-01", { minLevel: 7, maxLevel: 9 });
+    const simulation = new GameSimulation(run.config, run.pattern);
+
+    simulation.step(1200);
+    const progress = createInitialChallengeProgress(run.track.id);
+    const summary = createChallengeRunSummary(simulation.getState(), run.config, progress);
+
+    expect(summary.speedLevel).toBe(7);
+    expect(run.config).toMatchObject({
+      speedLevelMin: 7,
+      speedLevelMax: 9,
     });
   });
 });

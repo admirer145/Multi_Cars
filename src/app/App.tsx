@@ -1330,19 +1330,19 @@ function drawReplayRoad(
 ): void {
   if (carCount === 1) {
     context.fillStyle = "#101827";
-    roundRect(context, scale(166, "x"), scale(94, "y"), scale(388, "x"), scale(1220, "y"), scale(16, "x"));
+    roundRect(context, scale(96, "x"), scale(94, "y"), scale(528, "x"), scale(1220, "y"), scale(16, "x"));
     context.fill();
     context.fillStyle = "#202938";
-    roundRect(context, scale(238, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
+    roundRect(context, scale(144, "x"), scale(100, "y"), scale(432, "x"), scale(1180, "y"), scale(12, "x"));
     context.fill();
   } else {
     context.fillStyle = "#101827";
     roundRect(context, scale(46, "x"), scale(94, "y"), scale(628, "x"), scale(1220, "y"), scale(16, "x"));
     context.fill();
     context.fillStyle = "#202938";
-    roundRect(context, scale(92, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
+    roundRect(context, scale(74, "x"), scale(100, "y"), scale(280, "x"), scale(1180, "y"), scale(12, "x"));
     context.fill();
-    roundRect(context, scale(384, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
+    roundRect(context, scale(366, "x"), scale(100, "y"), scale(280, "x"), scale(1180, "y"), scale(12, "x"));
     context.fill();
   }
 
@@ -1364,12 +1364,12 @@ function drawReplayRoad(
 function getReplayLaneX(carCount: number): Record<RoadSide, [number, number]> {
   return carCount === 1
     ? {
-        left: [302, 418],
-        right: [450, 566],
+        left: [252, 468],
+        right: [438, 574],
       }
     : {
-        left: [154, 270],
-        right: [450, 566],
+        left: [146, 282],
+        right: [438, 574],
       };
 }
 

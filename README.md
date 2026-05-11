@@ -7,11 +7,11 @@ The current build is a playable prototype with a React/Tailwind app shell and a 
 ## Current State
 
 - Classic mode is playable as an endless run with 1-car and 2-car options.
-- Challenge Roads are playable as finite authored tracks with categories, locked levels, progress, and stars.
+- Challenge Roads are playable as 25 finite authored tracks across five categories, with locked levels, progress, and stars.
 - Practice Drills are playable as finite focused drills with local best progress saved per drill.
 - Daily Road is playable as a date-seeded finite route with isolated local progress.
 - Garage is available with local achievements and cosmetic-only car skins.
-- Control Room starts Classic at level 5, caps at level 20, and enables Shield by default.
+- Control Room starts runs at level 5, caps at level 20, applies speed settings to Classic, Challenge, Practice, and Daily, and enables Shield by default.
 - Failed runs can open a local non-interactive replay of the final mistake window from the summary screen.
 - The app has install metadata and can reload its cached shell offline after a first online visit.
 - The main menu, Challenge selection, Settings, and Run Ended summary are React/Tailwind screens.
@@ -87,7 +87,7 @@ Classic is the endless high-score mode. It uses deterministic seeded pattern gen
 
 ### Challenge Roads
 
-Challenge Roads are finite authored tracks organized by skill category and level. Current categories include focus, coordination, recognition, and reaction. Challenge progress stores best percent, stars, completion state, and attempts locally.
+Challenge Roads are finite authored tracks organized by skill category and level. The current set has five levels each for focus, coordination, recognition, reaction, and endurance. Challenge progress stores best percent, stars, completion state, and attempts locally.
 
 ### Practice Drills
 
@@ -103,7 +103,7 @@ Garage contains local achievements and cosmetic-only car skins. Achievement unlo
 
 ### Control Room Modifiers
 
-Power ups and advanced obstacle variety are local settings. Shield starts enabled by default; slow motion, magnet, score multiplier pickups, dual-collect pairs, and advanced obstacle variety remain opt-in.
+Speed, power ups, and advanced obstacle variety are local settings. The level range applies to Classic, Challenge, Practice, and Daily runs. Shield starts enabled by default; slow motion, magnet, score multiplier pickups, dual-collect pairs, and advanced obstacle variety remain opt-in.
 
 ## Project Structure
 
@@ -147,9 +147,9 @@ Progress, settings, achievements, selected car skin, Challenge progress, and Dai
 Latest documented verification:
 
 ```text
-npm run test      -> passed, 71 tests
+npm run test      -> passed, 76 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 37 browser tests, 7 expected project-specific skips
+npm run test:e2e  -> passed, 39 browser tests, 7 expected project-specific skips
 ```
 
 ## Next Planned Milestone

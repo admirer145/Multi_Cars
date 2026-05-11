@@ -89,6 +89,26 @@ test("summary Back returns to Challenge road selection", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Challenge Roads" })).toBeVisible();
 });
 
+test("opens replay last mistake from summary without leaving summary", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Challenge Roads/ }).click();
+  await page.getByRole("button", { name: /Focus Road I/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
+
+  await page.getByRole("button", { name: "Replay Mistake" }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-replay-status", /playing|complete/);
+  await expect(page.getByText("Mistake Replay")).toBeVisible();
+  await expect(page.getByLabel("Replay of the final mistake")).toBeVisible();
+
+  await page.getByRole("button", { name: "Close" }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary");
+});
+
 test("summary Back returns to Practice drill selection", async ({ page }) => {
   await page.goto("/");
 

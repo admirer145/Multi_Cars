@@ -4,11 +4,11 @@ This file tracks where the project currently stands against the implementation p
 
 ## Current Status
 
-Current checkpoint: **Milestone 8 - Engagement Layer**
+Current checkpoint: **Milestone 9 - Replay Last Mistake**
 
-Status: **Completed starter Engagement Layer with opt-in gameplay modifiers**
+Status: **Completed Replay Last Mistake**
 
-The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, Daily Challenge has a date-seeded offline route, local achievements/cosmetic skins are in place, and Control Room now gates optional power ups plus obstacle variety.
+The basic playable version is working, the deterministic pattern foundation is in place, Classic mode is endless, Challenge mode has categorized road selection with level progression, Practice mode has focused deterministic drills, Daily Challenge has a date-seeded offline route, local achievements/cosmetic skins are in place, Control Room gates optional modifiers, and failed runs can open a local non-interactive replay of the final mistake window.
 
 ## Progress Summary
 
@@ -23,7 +23,7 @@ The basic playable version is working, the deterministic pattern foundation is i
 | 6. Practice Mode | Done | Focused deterministic drills, Practice menu flow, gameplay routing, summary/replay, no progress writes, and tests are in place. |
 | 7. Daily Challenge | Done | Date-seeded Daily route, local daily progress, home entry, gameplay routing, summary/replay, and tests are in place. |
 | 8. Engagement Layer | Done | Local achievements, cosmetic-only car skins, Garage surface, optional gameplay modifiers, summary unlock callouts, persistence, and tests are in place. |
-| 9. Replay Last Mistake | Not Started | Planned after core modes stabilize. |
+| 9. Replay Last Mistake | Done | Rolling replay capture, summary replay action, non-interactive replay overlay, unit tests, and browser coverage are in place. |
 | 10. PWA And Offline Hardening | Not Started | Offline-first architecture planned, PWA not added yet. |
 | 11. Polish And Device QA | Not Started | Basic e2e viewport tests exist; visual polish and device QA remain. |
 
@@ -393,28 +393,49 @@ Verification:
 - `npm run build` passed.
 - `npm run test:e2e` passed with 31 tests and 7 expected project-specific skips.
 
-## Active Next Checkpoint
-
 ### Milestone 9: Replay Last Mistake
 
 Goal:
 
 Add an optional post-run replay of the final mistake window so players can see what they missed without changing the run result.
 
+Completed:
+
+- Added `ReplayBuffer` with bounded rolling simulation-state snapshots.
+- Gameplay now records replay frames during active runs and attaches a replay clip to failed/completed run details.
+- Summary now offers `Replay Mistake` for failed runs with a captured clip.
+- Added a local non-interactive canvas replay overlay that loops the final mistake window.
+- Replay is local-only, does not restart Phaser, and does not write progress or scores.
+- Added unit tests for replay window trimming, sampling, final-state inclusion, and cloned replay frames.
+- Added browser coverage for opening replay from summary on desktop and mobile profiles.
+
+Verification:
+
+- `npm run test` passed with 67 tests.
+- `npm run build` passed.
+- `npm run test:e2e` passed with 33 tests and 7 expected project-specific skips.
+
+## Active Next Checkpoint
+
+### Milestone 10: PWA And Offline Hardening
+
+Goal:
+
+Make the game installable and more resilient offline while keeping the current local-first architecture.
+
 Required work:
 
-- Capture a short rolling window of simulation state or input events during gameplay.
-- Pass replay metadata to the summary overlay.
-- Add a replay-last-mistake action to the summary screen.
-- Render a non-interactive replay view.
-- Keep replay optional and local only.
-- Add unit tests for replay capture boundaries and browser coverage for opening replay from summary.
+- Add web app manifest and install metadata.
+- Add service worker or Vite PWA setup for offline shell caching.
+- Confirm local storage data survives offline reloads.
+- Add offline smoke coverage where practical.
+- Document install/offline behavior and limitations.
 
 Acceptance checklist:
 
-- Replay shows the final few seconds before failure.
-- Replay does not allow input or alter saved progress.
-- Summary still supports normal replay and menu actions.
+- App can load after the first visit without network.
+- Core game assets are cached for offline play.
+- Local progress and settings remain browser-local.
 - Existing unit, build, and browser smoke tests pass.
 
 ## Checkpoint Rules
@@ -436,12 +457,12 @@ Before moving to a new milestone:
 
 ## Latest Verification
 
-Last verified after Engagement Layer modifier pass:
+Last verified after Replay Last Mistake milestone:
 
 ```text
-npm run test      -> passed, 63 tests
+npm run test      -> passed, 67 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 31 browser tests, 7 expected project-specific skips
+npm run test:e2e  -> passed, 33 browser tests, 7 expected project-specific skips
 ```
 
 Current local dev URL:

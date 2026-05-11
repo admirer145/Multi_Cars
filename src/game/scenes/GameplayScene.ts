@@ -31,6 +31,7 @@ import {
   type DailyRun,
   updateDailyProgress,
 } from "../../core/modes/dailyMode";
+import { ReplayBuffer } from "../../core/replay/replayBuffer";
 import { GameSimulation } from "../../core/rules/simulation";
 import type { ActiveObjectState, ModeConfig, PatternEvent, RoadSide, SimulationState } from "../../core/types";
 import {
@@ -81,6 +82,7 @@ export class GameplayScene extends Phaser.Scene {
   private modeConfig!: ModeConfig;
   private activeMode: "classic" | "challenge" | "practice" | "daily" = "classic";
   private pattern: PatternEvent[] = [];
+  private replayBuffer = new ReplayBuffer();
   private classicRun?: ClassicRun;
   private challengeRun?: ChallengeRun;
   private practiceRun?: PracticeRun;
@@ -153,6 +155,7 @@ export class GameplayScene extends Phaser.Scene {
     const cappedDelta = Math.min(delta, 34);
     this.lastFrameDeltaMs = cappedDelta;
     const state = this.simulation.step(cappedDelta);
+    this.replayBuffer.record(state);
 
     if (
       this.activeMode === "classic" &&
@@ -265,6 +268,7 @@ export class GameplayScene extends Phaser.Scene {
     this.dailyRun = undefined;
     this.challengeProgress = undefined;
     this.dailyProgress = undefined;
+    this.replayBuffer.reset();
     const modifierSettings = loadGameplayModifierSettings();
 
     if (this.activeMode === "challenge") {
@@ -573,7 +577,7 @@ export class GameplayScene extends Phaser.Scene {
           this.drawDualCollectToken(x, object.y);
           break;
         case "power-up":
-          this.drawPowerUpToken(x, object.y, this.getPowerUpColor(object));
+          this.drawPowerUpToken(x, object.y, object);
           break;
         case "fake-collectible":
           this.drawFakeCollectibleToken(x, object.y);
@@ -603,7 +607,8 @@ export class GameplayScene extends Phaser.Scene {
     this.graphics.strokeCircle(x, y, 28);
   }
 
-  private drawPowerUpToken(x: number, y: number, color: number): void {
+  private drawPowerUpToken(x: number, y: number, object: ActiveObjectState): void {
+    const color = this.getPowerUpColor(object);
     this.graphics.fillStyle(0x000000, 0.24);
     this.graphics.fillEllipse(x, y + 32, 68, 16);
     this.graphics.fillStyle(color, 1);
@@ -611,7 +616,84 @@ export class GameplayScene extends Phaser.Scene {
     this.graphics.lineStyle(5, 0xffffff, 0.36);
     this.graphics.strokeCircle(x, y, 29);
     this.graphics.fillStyle(0xffffff, 0.9);
-    this.graphics.fillTriangle(x, y - 16, x + 13, y + 6, x - 13, y + 6);
+    this.drawPowerUpGlyph(x, y, object);
+  }
+
+  private drawPowerUpGlyph(x: number, y: number, object: ActiveObjectState): void {
+    switch (object.powerUpId) {
+      case "shield":
+        this.drawShieldGlyph(x, y);
+        break;
+      case "magnet":
+        this.drawMagnetGlyph(x, y);
+        break;
+      case "slow-motion":
+        this.drawSlowMotionGlyph(x, y);
+        break;
+      case "score-multiplier":
+        this.drawMultiplierGlyph(x, y);
+        break;
+      case "dual-collect":
+        this.drawDualGlyph(x, y);
+        break;
+      default:
+        this.graphics.fillTriangle(x, y - 16, x + 13, y + 6, x - 13, y + 6);
+        break;
+    }
+  }
+
+  private drawShieldGlyph(x: number, y: number): void {
+    this.drawClosedShape([
+      { x, y: y - 17 },
+      { x: x + 14, y: y - 9 },
+      { x: x + 10, y: y + 10 },
+      { x, y: y + 18 },
+      { x: x - 10, y: y + 10 },
+      { x: x - 14, y: y - 9 },
+    ]);
+    this.graphics.lineStyle(3, 0x0b1017, 0.36);
+    this.graphics.lineBetween(x, y - 10, x, y + 9);
+  }
+
+  private drawMagnetGlyph(x: number, y: number): void {
+    this.graphics.lineStyle(7, 0xffffff, 0.95);
+    this.graphics.lineBetween(x - 12, y - 13, x - 12, y + 8);
+    this.graphics.lineBetween(x + 12, y - 13, x + 12, y + 8);
+    this.graphics.lineBetween(x - 12, y + 8, x + 12, y + 8);
+    this.graphics.fillStyle(0xfb7185, 1);
+    this.graphics.fillRoundedRect(x - 17, y - 17, 10, 9, 3);
+    this.graphics.fillStyle(0x38bdf8, 1);
+    this.graphics.fillRoundedRect(x + 7, y - 17, 10, 9, 3);
+  }
+
+  private drawSlowMotionGlyph(x: number, y: number): void {
+    this.graphics.lineStyle(4, 0xffffff, 0.95);
+    this.graphics.strokeCircle(x, y, 14);
+    this.graphics.lineBetween(x, y, x, y - 9);
+    this.graphics.lineBetween(x, y, x + 8, y + 5);
+    this.graphics.lineStyle(3, 0xffffff, 0.55);
+    this.graphics.lineBetween(x - 24, y - 9, x - 15, y - 9);
+    this.graphics.lineBetween(x - 26, y, x - 16, y);
+    this.graphics.lineBetween(x - 24, y + 9, x - 15, y + 9);
+  }
+
+  private drawMultiplierGlyph(x: number, y: number): void {
+    this.graphics.lineStyle(5, 0xffffff, 0.95);
+    this.graphics.lineBetween(x - 19, y - 12, x - 7, y);
+    this.graphics.lineBetween(x - 7, y - 12, x - 19, y);
+    this.graphics.lineStyle(4, 0xffffff, 0.95);
+    this.graphics.lineBetween(x + 2, y - 12, x + 17, y - 12);
+    this.graphics.lineBetween(x + 17, y - 12, x + 17, y - 2);
+    this.graphics.lineBetween(x + 17, y - 2, x + 2, y + 12);
+    this.graphics.lineBetween(x + 2, y + 12, x + 18, y + 12);
+  }
+
+  private drawDualGlyph(x: number, y: number): void {
+    this.graphics.lineStyle(4, 0xffffff, 0.95);
+    this.graphics.strokeCircle(x - 8, y, 9);
+    this.graphics.strokeCircle(x + 8, y, 9);
+    this.graphics.lineStyle(3, 0xffffff, 0.72);
+    this.graphics.lineBetween(x - 1, y, x + 1, y);
   }
 
   private drawObstacleToken(x: number, y: number, color: number, moving: boolean): void {
@@ -625,14 +707,22 @@ export class GameplayScene extends Phaser.Scene {
     if (moving) {
       this.graphics.lineStyle(4, 0xffffff, 0.38);
       this.graphics.lineBetween(x - 24, y, x + 24, y);
+      this.graphics.fillStyle(0xffffff, 0.58);
+      this.graphics.fillTriangle(x - 28, y, x - 18, y - 7, x - 18, y + 7);
+      this.graphics.fillTriangle(x + 28, y, x + 18, y - 7, x + 18, y + 7);
     }
   }
 
   private drawFakeCollectibleToken(x: number, y: number): void {
     this.drawCollectibleToken(x, y, 0x34d399);
-    this.graphics.lineStyle(5, 0xfb7185, 0.85);
-    this.graphics.lineBetween(x - 13, y - 13, x + 13, y + 13);
-    this.graphics.lineBetween(x + 13, y - 13, x - 13, y + 13);
+    this.graphics.lineStyle(5, 0xfb7185, 0.9);
+    this.graphics.strokeCircle(x, y, 34);
+    this.graphics.fillStyle(0xfb7185, 0.92);
+    this.graphics.fillTriangle(x, y - 20, x + 18, y + 13, x - 18, y + 13);
+    this.graphics.lineStyle(4, 0xffffff, 0.95);
+    this.graphics.lineBetween(x, y - 8, x, y + 4);
+    this.graphics.fillStyle(0xffffff, 0.95);
+    this.graphics.fillCircle(x, y + 9, 3);
   }
 
   private drawTimedGateToken(x: number, y: number, closed: boolean): void {
@@ -813,6 +903,7 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.hasDispatchedEnd = true;
+    const replay = this.replayBuffer.createClip(state);
 
     if (this.activeMode === "challenge" && this.challengeRun && this.challengeProgress) {
       const updatedProgress = updateChallengeProgress(this.challengeProgress, state.completedPercent);
@@ -823,6 +914,7 @@ export class GameplayScene extends Phaser.Scene {
         mode: "challenge",
         trackId: this.challengeRun.track.id,
         finalState: state,
+        replay,
       });
       return;
     }
@@ -834,6 +926,7 @@ export class GameplayScene extends Phaser.Scene {
         mode: "practice",
         drillId: this.practiceRun.drill.id,
         finalState: state,
+        replay,
       });
       return;
     }
@@ -846,6 +939,7 @@ export class GameplayScene extends Phaser.Scene {
         nextRunIndex: this.runIndex,
         mode: "daily",
         finalState: state,
+        replay,
       });
       return;
     }
@@ -855,6 +949,7 @@ export class GameplayScene extends Phaser.Scene {
       nextRunIndex: this.runIndex + 1,
       mode: "classic",
       finalState: state,
+      replay,
     });
   }
 }

@@ -17,6 +17,9 @@ import {
 } from "./collisions";
 import { getCollectedScore } from "./scoring";
 
+const MOVING_OBSTACLE_SWITCH_INTERVAL_MS = 950;
+const MOVING_OBSTACLE_LOCK_DISTANCE = 260;
+
 export class GameSimulation {
   private readonly config: ModeConfig;
   private readonly pattern: PatternEvent[];
@@ -159,8 +162,12 @@ export class GameSimulation {
       object.y += (speed * deltaMs) / 1000;
 
       if (object.kind === "moving-obstacle") {
+        if (object.y >= COLLECTION_Y - MOVING_OBSTACLE_LOCK_DISTANCE) {
+          continue;
+        }
+
         const elapsedMs = Math.max(0, this.state.timeMs - object.timeMs);
-        const shouldSwitchLane = Math.floor(elapsedMs / 520) % 2 === 1;
+        const shouldSwitchLane = Math.floor(elapsedMs / MOVING_OBSTACLE_SWITCH_INTERVAL_MS) % 2 === 1;
         const spawnLane = object.spawnLane ?? object.lane;
         object.lane = shouldSwitchLane ? (spawnLane === 0 ? 1 : 0) : spawnLane;
       }

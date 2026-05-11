@@ -12,6 +12,7 @@ The current build is a playable prototype with a React/Tailwind app shell and a 
 - Daily Road is playable as a date-seeded finite route with isolated local progress.
 - Garage is available with local achievements and cosmetic-only car skins.
 - Control Room can opt into power ups and obstacle variety for generated runs; all modifiers are off by default.
+- Failed runs can open a local non-interactive replay of the final mistake window from the summary screen.
 - The main menu, Challenge selection, Settings, and Run Ended summary are React/Tailwind screens.
 - Phaser owns the active gameplay canvas only.
 - Gameplay supports keyboard, pointer, and mobile touch controls.
@@ -126,6 +127,7 @@ Key files:
 - `src/core/modes/dailyMode.ts`: Daily route generation, progress, stars, and summaries.
 - `src/core/engagement/achievements.ts`: Achievement rules and cosmetic car skin definitions.
 - `src/core/modifiers/gameplayModifiers.ts`: opt-in power-up and obstacle-variety settings.
+- `src/core/replay/replayBuffer.ts`: rolling local replay capture for the final mistake window.
 - `src/core/patterns/authoredTracks.ts`: authored Challenge road definitions.
 - `docs/CHECKPOINTS.md`: current implementation status and next checkpoint.
 - `docs/PLANNING_AND_IMPLEMENTATION.md`: full planning and implementation guide.
@@ -135,18 +137,18 @@ Key files:
 Latest documented verification:
 
 ```text
-npm run test      -> passed, 63 tests
+npm run test      -> passed, 67 tests
 npm run build     -> passed
-npm run test:e2e  -> passed, 31 browser tests, 7 expected project-specific skips
+npm run test:e2e  -> passed, 33 browser tests, 7 expected project-specific skips
 ```
 
 ## Next Planned Milestone
 
-The active next checkpoint is Replay Last Mistake:
+The active next checkpoint is PWA And Offline Hardening:
 
-- Capture the final few seconds before failure.
-- Add a non-interactive replay view from the summary screen.
-- Keep replay local and optional.
-- Preserve normal summary replay and menu actions.
+- Add install metadata and manifest.
+- Cache the app shell for offline reloads.
+- Keep progress and settings local-first.
+- Document offline behavior and limitations.
 
 See `docs/CHECKPOINTS.md` for the live checkpoint tracker.

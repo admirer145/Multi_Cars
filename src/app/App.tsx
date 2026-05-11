@@ -19,7 +19,7 @@ import {
   Target,
   Trophy,
 } from "lucide-react";
-import { createGameConfig } from "./gameConfig";
+import { createGameConfig, GAME_HEIGHT, GAME_WIDTH } from "./gameConfig";
 import {
   MENU_REQUEST_EVENT,
   RUN_ENDED_EVENT,
@@ -37,6 +37,7 @@ import {
   type AchievementState,
   type CarSkinId,
 } from "../core/engagement/achievements";
+import { COLLECTION_Y } from "../core/constants";
 import {
   AUTHORED_TRACKS,
   getAuthoredTracksByCategory,
@@ -58,6 +59,8 @@ import {
   type ObstacleVarietyId,
   type PowerUpId,
 } from "../core/modifiers/gameplayModifiers";
+import type { ReplayClip, ReplayFrame } from "../core/replay/replayBuffer";
+import type { ActiveObjectState, RoadSide } from "../core/types";
 import {
   loadChallengeProgress,
   loadClassicHighScore,
@@ -775,7 +778,9 @@ function SummaryOverlay({
   onReplay: () => void;
 }): ReactElement {
   const { summary } = detail;
+  const [showReplay, setShowReplay] = useState(false);
   const backLabel = summary.modeId === "challenge" || summary.modeId === "practice" ? "Back" : "Menu";
+  const canReplayMistake = summary.result === "failed" && Boolean(detail.replay?.frames.length && detail.replay.frames.length > 1);
 
   useEffect(() => {
     document.body.dataset.screen = "summary";
@@ -841,7 +846,17 @@ function SummaryOverlay({
           <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "daily" ? "Stars" : summary.modeId === "practice" ? "Drill" : "Speed"} value={summary.modeId === "challenge" || summary.modeId === "daily" ? `${summary.stars ?? 0}/3` : summary.modeId === "practice" ? "Local" : summary.speedLevel} />
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3">
+        {canReplayMistake ? (
+          <button
+            type="button"
+            onClick={() => setShowReplay(true)}
+            className="mt-5 w-full rounded-2xl border border-goldline/35 bg-goldline/12 px-4 py-4 font-black text-goldline"
+          >
+            Replay Mistake
+          </button>
+        ) : null}
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
           <button type="button" onClick={onReplay} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyanline px-4 py-4 font-black text-ink shadow-glow">
             <RotateCcw size={18} /> Again
           </button>
@@ -849,6 +864,96 @@ function SummaryOverlay({
             {backLabel}
           </button>
         </div>
+      </section>
+      {showReplay && detail.replay ? (
+        <MistakeReplayOverlay
+          clip={detail.replay}
+          modeLabel={summary.modeLabel}
+          onClose={() => setShowReplay(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function MistakeReplayOverlay({
+  clip,
+  modeLabel,
+  onClose,
+}: {
+  clip: ReplayClip;
+  modeLabel: string;
+  onClose: () => void;
+}): ReactElement {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    document.body.dataset.replayStatus = "playing";
+    return () => {
+      document.body.dataset.replayStatus = "";
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) {
+      return undefined;
+    }
+
+    let animationFrameId = 0;
+    let startedAt: number | undefined;
+    let completed = false;
+
+    const draw = (timestamp: number) => {
+      startedAt ??= timestamp;
+      const elapsedMs = timestamp - startedAt;
+      const frame = getReplayFrame(clip, elapsedMs);
+      drawReplayFrame(context, frame);
+
+      if (elapsedMs >= clip.durationMs) {
+        if (!completed) {
+          completed = true;
+          document.body.dataset.replayStatus = "complete";
+          setIsComplete(true);
+        }
+        return;
+      }
+
+      animationFrameId = window.requestAnimationFrame(draw);
+    };
+
+    animationFrameId = window.requestAnimationFrame(draw);
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [clip]);
+
+  return (
+    <div className="absolute inset-0 z-30 grid place-items-center bg-ink/80 px-4 backdrop-blur-md">
+      <section className="w-full max-w-sm rounded-[1.75rem] border border-white/15 bg-panel/96 p-4 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-goldline">Mistake Replay</p>
+            <h3 className="mt-1 text-2xl font-black">{modeLabel}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-white/10 bg-white/8 px-4 py-2 text-sm font-black"
+          >
+            Close
+          </button>
+        </div>
+        <canvas
+          ref={canvasRef}
+          width={360}
+          height={640}
+          aria-label="Replay of the final mistake"
+          className="mt-4 aspect-[9/16] w-full rounded-2xl border border-white/10 bg-ink"
+        />
+        <p className="mt-3 text-center text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+          {isComplete ? "Replay complete" : "Playing final 5 seconds"}
+        </p>
       </section>
     </div>
   );
@@ -1086,6 +1191,447 @@ function TopBar({
       </div>
     </header>
   );
+}
+
+function getReplayFrame(clip: ReplayClip, elapsedMs: number): ReplayFrame {
+  const frames = clip.frames;
+  if (frames.length === 0) {
+    throw new Error("Replay clip contains no frames.");
+  }
+
+  if (frames.length === 1 || clip.durationMs <= 0) {
+    return frames[frames.length - 1];
+  }
+
+  const firstFrameAtMs = frames[0].atMs;
+  const replayTimeMs = firstFrameAtMs + Math.min(elapsedMs, Math.max(0, clip.durationMs));
+
+  return frames.reduce((closest, frame) => (
+    Math.abs(frame.atMs - replayTimeMs) < Math.abs(closest.atMs - replayTimeMs) ? frame : closest
+  ), frames[0]);
+}
+
+function drawReplayFrame(context: CanvasRenderingContext2D, frame: ReplayFrame): void {
+  const { width, height } = context.canvas;
+  const scaleX = width / GAME_WIDTH;
+  const scaleY = height / GAME_HEIGHT;
+  const scale = (value: number, axis: "x" | "y") => value * (axis === "x" ? scaleX : scaleY);
+  const laneX: Record<RoadSide, [number, number]> = {
+    left: [154, 270],
+    right: [450, 566],
+  };
+
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = "#070b12";
+  context.fillRect(0, 0, width, height);
+  drawReplayRoad(context, scale);
+
+  for (const object of frame.state.objects) {
+    if (object.collected || object.y < 70 || object.y > GAME_HEIGHT + 90) {
+      continue;
+    }
+
+    drawReplayObject(
+      context,
+      object,
+      scale(laneX[object.side][object.lane], "x"),
+      scale(object.y, "y"),
+      frame.state.timeMs,
+      object.id === frame.state.failure?.objectId,
+    );
+  }
+
+  drawReplayCar(context, scale(laneX.left[frame.state.cars.left.lane], "x"), scale(COLLECTION_Y, "y"), "#3dd6c6");
+  drawReplayCar(context, scale(laneX.right[frame.state.cars.right.lane], "x"), scale(COLLECTION_Y, "y"), "#ffd166");
+
+  context.fillStyle = "rgba(7, 11, 18, 0.82)";
+  roundRect(context, 44 * scaleX, 14 * scaleY, width - 88 * scaleX, 32 * scaleY, 10 * scaleX);
+  context.fill();
+  context.fillStyle = "#f8fafc";
+  context.font = "700 12px Inter, system-ui, sans-serif";
+  context.textAlign = "center";
+  context.fillText(`Score ${frame.state.score}   ${Math.round(frame.atMs / 100) / 10}s`, width / 2, 35 * scaleY);
+}
+
+function drawReplayRoad(
+  context: CanvasRenderingContext2D,
+  scale: (value: number, axis: "x" | "y") => number,
+): void {
+  context.fillStyle = "#101827";
+  roundRect(context, scale(46, "x"), scale(94, "y"), scale(628, "x"), scale(1220, "y"), scale(16, "x"));
+  context.fill();
+  context.fillStyle = "#202938";
+  roundRect(context, scale(92, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
+  context.fill();
+  roundRect(context, scale(384, "x"), scale(100, "y"), scale(244, "x"), scale(1180, "y"), scale(12, "x"));
+  context.fill();
+  context.strokeStyle = "rgba(248, 250, 252, 0.22)";
+  context.lineWidth = scale(4, "x");
+  context.beginPath();
+  context.moveTo(scale(214, "x"), scale(100, "y"));
+  context.lineTo(scale(214, "x"), scale(1280, "y"));
+  context.moveTo(scale(506, "x"), scale(100, "y"));
+  context.lineTo(scale(506, "x"), scale(1280, "y"));
+  context.stroke();
+}
+
+function drawReplayObject(
+  context: CanvasRenderingContext2D,
+  object: ActiveObjectState,
+  x: number,
+  y: number,
+  timeMs: number,
+  highlighted: boolean,
+): void {
+  switch (object.kind) {
+    case "collectible":
+      drawReplayCollectibleToken(context, x, y, "#6ee7b7");
+      break;
+    case "color-match":
+      drawReplayColorMatchToken(context, x, y, object.colorKey === "right" ? "#ffd166" : "#3dd6c6");
+      break;
+    case "dual-collect":
+      drawReplayDualCollectToken(context, x, y);
+      break;
+    case "power-up":
+      drawReplayPowerUpToken(context, x, y, object);
+      break;
+    case "fake-collectible":
+      drawReplayFakeCollectibleToken(context, x, y);
+      break;
+    case "moving-obstacle":
+      drawReplayObstacleToken(context, x, y, "#f97316", true);
+      break;
+    case "timed-gate":
+      drawReplayTimedGateToken(context, x, y, isReplayTimedGateClosed(object, timeMs));
+      break;
+    case "obstacle":
+    default:
+      drawReplayObstacleToken(context, x, y, "#fb7185", false);
+      break;
+  }
+
+  if (highlighted) {
+    context.strokeStyle = "#ffd166";
+    context.lineWidth = 4;
+    context.beginPath();
+    context.arc(x, y, 24, 0, Math.PI * 2);
+    context.stroke();
+  }
+}
+
+function drawReplayCollectibleToken(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+): void {
+  context.fillStyle = "rgba(0, 0, 0, 0.22)";
+  context.beginPath();
+  context.ellipse(x, y + 15, 16, 4, 0, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = color;
+  context.beginPath();
+  context.arc(x, y, 14, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "rgba(255, 255, 255, 0.8)";
+  context.beginPath();
+  context.arc(x - 4, y - 4, 4, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = "rgba(255, 255, 255, 0.28)";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.arc(x, y, 14, 0, Math.PI * 2);
+  context.stroke();
+}
+
+function drawReplayPowerUpToken(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  object: ActiveObjectState,
+): void {
+  context.fillStyle = "rgba(0, 0, 0, 0.24)";
+  context.beginPath();
+  context.ellipse(x, y + 16, 17, 4, 0, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = getReplayPowerUpColor(object);
+  context.beginPath();
+  context.arc(x, y, 15, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = "rgba(255, 255, 255, 0.36)";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.arc(x, y, 15, 0, Math.PI * 2);
+  context.stroke();
+  drawReplayPowerUpGlyph(context, x, y, object);
+}
+
+function drawReplayPowerUpGlyph(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  object: ActiveObjectState,
+): void {
+  switch (object.powerUpId) {
+    case "shield":
+      context.fillStyle = "rgba(255, 255, 255, 0.94)";
+      context.beginPath();
+      context.moveTo(x, y - 10);
+      context.lineTo(x + 8, y - 5);
+      context.lineTo(x + 6, y + 6);
+      context.lineTo(x, y + 11);
+      context.lineTo(x - 6, y + 6);
+      context.lineTo(x - 8, y - 5);
+      context.closePath();
+      context.fill();
+      break;
+    case "magnet":
+      context.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      context.lineWidth = 4;
+      context.beginPath();
+      context.moveTo(x - 7, y - 8);
+      context.lineTo(x - 7, y + 5);
+      context.lineTo(x + 7, y + 5);
+      context.lineTo(x + 7, y - 8);
+      context.stroke();
+      context.fillStyle = "#fb7185";
+      roundRect(context, x - 10, y - 11, 6, 5, 2);
+      context.fill();
+      context.fillStyle = "#38bdf8";
+      roundRect(context, x + 4, y - 11, 6, 5, 2);
+      context.fill();
+      break;
+    case "slow-motion":
+      context.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      context.lineWidth = 3;
+      context.beginPath();
+      context.arc(x, y, 9, 0, Math.PI * 2);
+      context.moveTo(x, y);
+      context.lineTo(x, y - 6);
+      context.moveTo(x, y);
+      context.lineTo(x + 6, y + 3);
+      context.stroke();
+      context.strokeStyle = "rgba(255, 255, 255, 0.55)";
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(x - 16, y - 6);
+      context.lineTo(x - 10, y - 6);
+      context.moveTo(x - 18, y);
+      context.lineTo(x - 10, y);
+      context.moveTo(x - 16, y + 6);
+      context.lineTo(x - 10, y + 6);
+      context.stroke();
+      break;
+    case "score-multiplier":
+      context.fillStyle = "rgba(255, 255, 255, 0.96)";
+      context.font = "900 14px Inter, system-ui, sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText("x2", x, y + 1);
+      break;
+    case "dual-collect":
+      context.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      context.lineWidth = 3;
+      context.beginPath();
+      context.arc(x - 5, y, 6, 0, Math.PI * 2);
+      context.arc(x + 5, y, 6, 0, Math.PI * 2);
+      context.stroke();
+      break;
+    default:
+      context.fillStyle = "rgba(255, 255, 255, 0.92)";
+      context.beginPath();
+      context.moveTo(x, y - 9);
+      context.lineTo(x + 7, y + 4);
+      context.lineTo(x - 7, y + 4);
+      context.closePath();
+      context.fill();
+      break;
+  }
+}
+
+function drawReplayObstacleToken(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+  moving: boolean,
+): void {
+  context.fillStyle = "rgba(0, 0, 0, 0.25)";
+  context.beginPath();
+  context.ellipse(x, y + 17, 18, 5, 0, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = color;
+  roundRect(context, x - 16, y - 16, 32, 32, moving ? 11 : 4);
+  context.fill();
+  context.strokeStyle = "rgba(255, 255, 255, 0.24)";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(x - 9, y - 9);
+  context.lineTo(x + 9, y + 9);
+  context.moveTo(x + 9, y - 9);
+  context.lineTo(x - 9, y + 9);
+  if (moving) {
+    context.moveTo(x - 12, y);
+    context.lineTo(x + 12, y);
+  }
+  context.stroke();
+  if (moving) {
+    context.fillStyle = "rgba(255, 255, 255, 0.58)";
+    context.beginPath();
+    context.moveTo(x - 17, y);
+    context.lineTo(x - 11, y - 4);
+    context.lineTo(x - 11, y + 4);
+    context.closePath();
+    context.fill();
+    context.beginPath();
+    context.moveTo(x + 17, y);
+    context.lineTo(x + 11, y - 4);
+    context.lineTo(x + 11, y + 4);
+    context.closePath();
+    context.fill();
+  }
+}
+
+function drawReplayFakeCollectibleToken(context: CanvasRenderingContext2D, x: number, y: number): void {
+  drawReplayCollectibleToken(context, x, y, "#34d399");
+  context.strokeStyle = "rgba(251, 113, 133, 0.95)";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.arc(x, y, 17, 0, Math.PI * 2);
+  context.stroke();
+  context.fillStyle = "rgba(251, 113, 133, 0.94)";
+  context.beginPath();
+  context.moveTo(x, y - 11);
+  context.lineTo(x + 10, y + 8);
+  context.lineTo(x - 10, y + 8);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = "rgba(255, 255, 255, 0.96)";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(x, y - 4);
+  context.lineTo(x, y + 3);
+  context.stroke();
+  context.fillStyle = "rgba(255, 255, 255, 0.96)";
+  context.beginPath();
+  context.arc(x, y + 6, 1.8, 0, Math.PI * 2);
+  context.fill();
+}
+
+function drawReplayTimedGateToken(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  closed: boolean,
+): void {
+  const color = closed ? "#f97316" : "#38bdf8";
+  context.fillStyle = "rgba(0, 0, 0, 0.24)";
+  context.beginPath();
+  context.ellipse(x, y + 16, 20, 4, 0, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = closed ? color : "rgba(56, 189, 248, 0.45)";
+  context.lineWidth = 4;
+  context.beginPath();
+  context.moveTo(x - 14, y - 15);
+  context.lineTo(x - 14, y + 15);
+  context.moveTo(x + 14, y - 15);
+  context.lineTo(x + 14, y + 15);
+  context.moveTo(x - 14, y - 12);
+  context.lineTo(x + 14, y - 12);
+  if (closed) {
+    context.moveTo(x - 14, y + 12);
+    context.lineTo(x + 14, y + 12);
+  }
+  context.stroke();
+}
+
+function drawReplayColorMatchToken(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+): void {
+  context.fillStyle = "rgba(0, 0, 0, 0.22)";
+  context.beginPath();
+  context.ellipse(x, y + 15, 16, 4, 0, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = color;
+  context.beginPath();
+  context.moveTo(x, y - 16);
+  context.lineTo(x + 16, y);
+  context.lineTo(x, y + 16);
+  context.lineTo(x - 16, y);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = "rgba(255, 255, 255, 0.32)";
+  context.lineWidth = 3;
+  context.stroke();
+}
+
+function drawReplayDualCollectToken(context: CanvasRenderingContext2D, x: number, y: number): void {
+  drawReplayCollectibleToken(context, x, y, "#a7f3d0");
+  context.strokeStyle = "rgba(255, 209, 102, 0.9)";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.arc(x, y, 9, 0, Math.PI * 2);
+  context.stroke();
+}
+
+function getReplayPowerUpColor(object: ActiveObjectState): string {
+  switch (object.powerUpId) {
+    case "shield":
+      return "#38bdf8";
+    case "slow-motion":
+      return "#818cf8";
+    case "magnet":
+      return "#f472b6";
+    case "score-multiplier":
+      return "#22c55e";
+    case "dual-collect":
+      return "#a7f3d0";
+    default:
+      return "#8bd3ff";
+  }
+}
+
+function isReplayTimedGateClosed(object: ActiveObjectState, timeMs: number): boolean {
+  const elapsedMs = Math.max(0, timeMs - object.timeMs);
+  return object.kind !== "timed-gate" || Math.floor(elapsedMs / 480) % 2 === 0;
+}
+
+function drawReplayCar(context: CanvasRenderingContext2D, x: number, y: number, color: string): void {
+  context.fillStyle = "rgba(0, 0, 0, 0.28)";
+  context.beginPath();
+  context.ellipse(x, y + 24, 20, 6, 0, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = color;
+  roundRect(context, x - 16, y - 26, 32, 52, 8);
+  context.fill();
+  context.fillStyle = "rgba(255, 255, 255, 0.24)";
+  roundRect(context, x - 9, y - 19, 18, 30, 6);
+  context.fill();
+}
+
+function roundRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.lineTo(x + width - radius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + radius);
+  context.lineTo(x + width, y + height - radius);
+  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  context.lineTo(x + radius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - radius);
+  context.lineTo(x, y + radius);
+  context.quadraticCurveTo(x, y, x + radius, y);
+  context.closePath();
 }
 
 function ScoreTile({ label, value }: { label: string; value: string | number }): ReactElement {

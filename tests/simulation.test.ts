@@ -59,6 +59,25 @@ describe("game simulation", () => {
     expect(state.failure?.reason).toBe("hit-obstacle");
   });
 
+  it("locks moving obstacle lane before the collection zone", () => {
+    const simulation = new GameSimulation(baseConfig, [
+      createEvent({ kind: "moving-obstacle", required: false }),
+    ]);
+
+    simulation.step(1200);
+    expect(simulation.getState().objects[0]).toMatchObject({
+      kind: "moving-obstacle",
+      lane: 1,
+    });
+
+    simulation.step(700);
+
+    expect(simulation.getState().objects[0]).toMatchObject({
+      kind: "moving-obstacle",
+      lane: 1,
+    });
+  });
+
   it("allows each car to toggle only within its road group", () => {
     const simulation = new GameSimulation(baseConfig, []);
 

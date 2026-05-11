@@ -1,5 +1,6 @@
 import type { RunSummary, SimulationState } from "../core/types";
 import type { AchievementId } from "../core/engagement/achievements";
+import type { ReplayClip } from "../core/replay/replayBuffer";
 
 export type AppScreen = "home" | "challenge-select" | "practice-select" | "garage" | "settings" | "gameplay" | "summary";
 export type PlayMode = "classic" | "challenge" | "practice" | "daily";
@@ -19,6 +20,7 @@ export type RunEndedDetail = {
   drillId?: string;
   unlockedAchievementIds?: AchievementId[];
   finalState?: SimulationState;
+  replay?: ReplayClip;
 };
 
 export const RUN_ENDED_EVENT = "multi-cars:run-ended";

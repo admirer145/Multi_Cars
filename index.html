@@ -5,18 +5,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#111827" />
     <meta name="application-name" content="Multi Cars" />
+    <meta
+      name="description"
+      content="Play Multi Cars, a fast offline reflex driving game with one-car and two-car modes, challenge roads, practice drills, daily routes, and local progress."
+    />
+    <meta
+      name="keywords"
+      content="multi cars, two cars game, reflex game, driving game, browser game, offline game, car lane game, focus game, practice drills"
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="author" content="Multi Cars" />
+    <link rel="canonical" href="https://multi-cars.vercel.app/" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Multi Cars" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon.svg" />
-    <title>Multi Cars</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Multi Cars" />
+    <meta property="og:title" content="Multi Cars - Offline Reflex Driving Game" />
+    <meta
+      property="og:description"
+      content="Control one or two cars, switch lanes, collect targets, avoid obstacles, and train focus with challenges, practice drills, and daily roads."
+    />
+    <meta property="og:url" content="https://multi-cars.vercel.app/" />
+    <meta property="og:image" content="https://multi-cars.vercel.app/icon.svg" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Multi Cars - Offline Reflex Driving Game" />
+    <meta
+      name="twitter:description"
+      content="A fast local-first browser game for focus, lane reading, and two-hand coordination."
+    />
+    <meta name="twitter:image" content="https://multi-cars.vercel.app/icon.svg" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Multi Cars",
+        "url": "https://multi-cars.vercel.app/",
+        "applicationCategory": "Game",
+        "operatingSystem": "Web browser",
+        "gamePlatform": "Web browser",
+        "genre": ["Arcade", "Driving", "Reflex"],
+        "description": "A fast offline browser driving game with one-car and two-car modes, challenge roads, practice drills, daily routes, and local progress.",
+        "playMode": "SinglePlayer",
+        "inLanguage": "en",
+        "isAccessibleForFree": true
+      }
+    </script>
+    <title>Multi Cars - Offline Reflex Driving Game</title>
   </head>
   <body>
     <div id="app">
       <div id="game-root"></div>
     </div>
+    <noscript>
+      <h1>Multi Cars</h1>
+      <p>
+        Multi Cars is an offline reflex driving game for web browsers. Play one-car or two-car
+        Classic mode, Challenge Roads, Practice Drills, and Daily Road while keeping progress local.
+      </p>
+    </noscript>
     <script type="module" src="/src/app/main.tsx"></script>
   </body>
 </html>

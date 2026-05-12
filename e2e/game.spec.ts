@@ -13,7 +13,7 @@ async function primeServiceWorkerCache(page: Page): Promise<void> {
   });
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Multi Cars" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Multi Cars", exact: true })).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
     .toBe(true);
@@ -28,7 +28,7 @@ async function startClassic(page: Page, optionName = /2 Cars/): Promise<void> {
 test("boots to the React menu instead of active gameplay", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Multi Cars" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Multi Cars", exact: true })).toBeVisible();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "menu");
   await expect(page.locator("canvas")).toHaveCount(0);
 });
@@ -282,7 +282,7 @@ test("Control Room speed settings affect Challenge Practice and Daily", async ({
 
 test("reloads the cached app shell offline with local settings intact", async ({ page, context }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Multi Cars" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Multi Cars", exact: true })).toBeVisible();
   await primeServiceWorkerCache(page);
 
   await page.getByRole("button", { name: /Control Room/ }).click();
@@ -292,7 +292,7 @@ test("reloads the cached app shell offline with local settings intact", async ({
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
 
-  await expect(page.getByRole("heading", { name: "Multi Cars" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Multi Cars", exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Control Room/ }).click();
   await expect(page.getByLabel("Minimum level")).toHaveValue("4");
 

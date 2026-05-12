@@ -472,7 +472,83 @@ function HomeScreen({
           <RoadShowcase />
         </div>
       </section>
+      <CrawlableHomeSections />
     </ScreenShell>
+  );
+}
+
+function CrawlableHomeSections(): ReactElement {
+  return (
+    <section className="mx-auto w-full max-w-5xl px-5 pb-12 pt-2 sm:px-8">
+      <div className="border-t border-white/10 pt-8">
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <article>
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-cyanline">Browser reflex game</p>
+            <h2 className="mt-3 text-3xl font-black sm:text-4xl">Train focus with one-car and two-car lane switching.</h2>
+            <p className="mt-4 max-w-2xl text-base font-semibold leading-relaxed text-slate-300">
+              Multi Cars is a fast offline driving game for focus, reaction time, lane reading, and two-hand coordination. Play short runs in your browser, avoid obstacles, collect targets, and lose instantly on one mistake.
+            </p>
+          </article>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <SeoFact title="Runs offline" detail="Installable PWA with local progress after the first visit." />
+            <SeoFact title="Five challenge categories" detail="Focus, coordination, recognition, reaction, and endurance roads." />
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <SeoPanel
+            title="How To Play"
+            detail="Switch each car between two lanes. Collect green targets, avoid obstacles, and keep reading both roads as speed rises."
+          />
+          <SeoPanel
+            title="Game Modes"
+            detail="Classic offers one-car and two-car runs. Challenge Roads add 25 authored levels. Practice Drills isolate specific skills. Daily Road gives a fresh seeded route."
+          />
+          <SeoPanel
+            title="Why It Works"
+            detail="The game is simple to start but demanding under speed, making each run a compact focus and coordination test."
+          />
+        </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
+          <SeoQuestion
+            question="Is Multi Cars free?"
+            answer="Yes. Multi Cars is free to play in a modern web browser."
+          />
+          <SeoQuestion
+            question="Does progress sync across devices?"
+            answer="Not yet. Scores, settings, achievements, and drill progress are saved locally in the current browser profile."
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SeoFact({ title, detail }: { title: string; detail: string }): ReactElement {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3">
+      <h3 className="text-base font-black text-slate-100">{title}</h3>
+      <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-300">{detail}</p>
+    </div>
+  );
+}
+
+function SeoPanel({ title, detail }: { title: string; detail: string }): ReactElement {
+  return (
+    <article className="rounded-3xl border border-white/10 bg-panel/70 p-5">
+      <h3 className="text-xl font-black">{title}</h3>
+      <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-300">{detail}</p>
+    </article>
+  );
+}
+
+function SeoQuestion({ question, answer }: { question: string; answer: string }): ReactElement {
+  return (
+    <article className="rounded-2xl border border-white/10 bg-white/6 p-4">
+      <h3 className="text-base font-black">{question}</h3>
+      <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-300">{answer}</p>
+    </article>
   );
 }
 

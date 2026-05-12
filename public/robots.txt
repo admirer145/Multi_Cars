@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://multi-cars.vercel.app/sitemap.xml

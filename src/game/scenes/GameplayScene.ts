@@ -39,6 +39,14 @@ import {
   type DailyRun,
   updateDailyProgress,
 } from "../../core/modes/dailyMode";
+import {
+  createVersusRun,
+  createVersusRunResult,
+  createVersusRunSummary,
+  type VersusMatchConfig,
+  type VersusPlayer,
+  type VersusRun,
+} from "../../core/multiplayer/versusMode";
 import { ReplayBuffer } from "../../core/replay/replayBuffer";
 import { GameSimulation } from "../../core/rules/simulation";
 import type { ActiveObjectState, ModeConfig, PatternEvent, RoadSide, SimulationState } from "../../core/types";
@@ -95,11 +103,13 @@ type VisualCarPose = {
 };
 
 type GameplaySceneData = {
-  mode?: "classic" | "challenge" | "practice" | "daily";
+  mode?: "classic" | "challenge" | "practice" | "daily" | "versus";
   runIndex?: number;
   trackId?: string;
   drillId?: string;
   carCount?: SupportedClassicCarCount;
+  versusMatchConfig?: VersusMatchConfig;
+  versusPlayer?: VersusPlayer;
 };
 
 export class GameplayScene extends Phaser.Scene {
@@ -109,13 +119,14 @@ export class GameplayScene extends Phaser.Scene {
   private helpText!: Phaser.GameObjects.Text;
   private simulation!: GameSimulation;
   private modeConfig!: ModeConfig;
-  private activeMode: "classic" | "challenge" | "practice" | "daily" = "classic";
+  private activeMode: "classic" | "challenge" | "practice" | "daily" | "versus" = "classic";
   private pattern: PatternEvent[] = [];
   private replayBuffer = new ReplayBuffer();
   private classicRun?: ClassicRun;
   private challengeRun?: ChallengeRun;
   private practiceRun?: PracticeRun;
   private dailyRun?: DailyRun;
+  private versusRun?: VersusRun;
   private challengeProgress?: ChallengeProgress;
   private dailyProgress?: DailyProgress;
   private practiceProgress?: PracticeProgress;
@@ -291,7 +302,13 @@ export class GameplayScene extends Phaser.Scene {
           ? { mode: "practice", drillId: this.practiceRun?.drill.id }
           : this.activeMode === "daily"
             ? { mode: "daily" }
-            : { mode: "classic", runIndex: this.runIndex + 1, carCount: this.carCount },
+            : this.activeMode === "versus" && this.versusRun
+              ? {
+                  mode: "versus",
+                  versusMatchConfig: this.versusRun.matchConfig,
+                  versusPlayer: this.versusRun.player,
+                }
+              : { mode: "classic", runIndex: this.runIndex + 1, carCount: this.carCount },
     );
     this.simulation.applyInput({ type: "RESTART", atMs: 0 });
   }
@@ -315,6 +332,7 @@ export class GameplayScene extends Phaser.Scene {
     this.challengeRun = undefined;
     this.practiceRun = undefined;
     this.dailyRun = undefined;
+    this.versusRun = undefined;
     this.challengeProgress = undefined;
     this.dailyProgress = undefined;
     this.practiceProgress = undefined;
@@ -322,7 +340,13 @@ export class GameplayScene extends Phaser.Scene {
     const modifierSettings = loadGameplayModifierSettings();
     const speedSettings = loadClassicSpeedSettings();
 
-    if (this.activeMode === "challenge") {
+    if (this.activeMode === "versus" && data.versusMatchConfig && data.versusPlayer) {
+      this.versusRun = createVersusRun(data.versusMatchConfig, data.versusPlayer);
+      this.modeConfig = this.versusRun.config;
+      this.pattern = this.versusRun.pattern;
+      this.carCount = this.versusRun.matchConfig.settings.carCount;
+      this.highScore = 0;
+    } else if (this.activeMode === "challenge") {
       this.challengeRun = createChallengeRun(data.trackId, speedSettings);
       this.challengeProgress = loadChallengeProgress(
         this.challengeRun.track.id,
@@ -374,7 +398,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private drawRoads(state: SimulationState): void {
-    const theme = this.challengeRun?.track.roadTheme ?? this.practiceRun?.drill.roadTheme ?? (this.dailyRun ? "storm" : "city");
+    const theme = this.challengeRun?.track.roadTheme ?? this.practiceRun?.drill.roadTheme ?? (this.dailyRun || this.versusRun ? "storm" : "city");
     const colors = ROAD_THEME_COLORS[theme];
     const activeSides = this.getActiveSides(state.carCount);
     this.graphics.fillStyle(0x0b1017, 1);
@@ -1069,6 +1093,25 @@ export class GameplayScene extends Phaser.Scene {
         summary: createDailyRunSummary(state, this.modeConfig, updatedProgress),
         nextRunIndex: this.runIndex,
         mode: "daily",
+        finalState: state,
+        replay,
+      });
+      return;
+    }
+
+    if (this.activeMode === "versus" && this.versusRun) {
+      const result = createVersusRunResult(
+        this.versusRun.matchConfig.matchId,
+        this.versusRun.player,
+        state,
+        this.modeConfig,
+      );
+      emitRunEnded({
+        summary: createVersusRunSummary(state, this.modeConfig, result),
+        nextRunIndex: this.runIndex,
+        mode: "versus",
+        carCount: this.carCount,
+        versusResult: result,
         finalState: state,
         replay,
       });

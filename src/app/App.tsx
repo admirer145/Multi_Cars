@@ -19,6 +19,8 @@ import {
   Star,
   Target,
   Trophy,
+  Users,
+  Wifi,
 } from "lucide-react";
 import { createGameConfig, GAME_HEIGHT, GAME_WIDTH } from "./gameConfig";
 import {
@@ -29,6 +31,18 @@ import {
   type PlayMode,
   type RunEndedDetail,
 } from "./gameBridge";
+import {
+  addVersusPlayer,
+  calculateVersusOutcome,
+  createVersusMatchConfig,
+  createVersusPlayerWithId,
+  formatVersusShareText,
+  normalizeVersusSettings,
+  removeVersusPlayer,
+  type VersusMatchConfig,
+  type VersusPlayer,
+  type VersusRunResult,
+} from "../core/multiplayer/versusMode";
 import {
   ACHIEVEMENTS,
   CAR_SKINS,
@@ -80,6 +94,8 @@ import {
   saveGameplayModifierSettings,
   saveSelectedCarSkin,
 } from "../persistence/storage";
+import type { MultiplayerConnectionState, MultiplayerRole, MultiplayerTransport } from "../network/transport";
+import { LanSocketTransport, getDefaultLanServerUrl } from "../network/lanSocketTransport";
 
 type ChallengeCategory = AuthoredTrack["category"];
 
@@ -96,11 +112,21 @@ const SPEED_LEVEL_OPTIONS = Array.from(
   { length: MAX_CLASSIC_SPEED_LEVEL - MIN_CLASSIC_SPEED_LEVEL + 1 },
   (_, index) => MIN_CLASSIC_SPEED_LEVEL + index,
 );
+const VERSUS_PLAYER_ID_KEY = "multi-cars:versus-player-id:v1";
+const VERSUS_PLAYER_NAME_KEY = "multi-cars:versus-player-name:v1";
 
 type AppHistoryState = {
   multiCars: true;
   screen: AppScreen;
   activeRun?: GameBootConfig | null;
+};
+
+type MultiplayerSession = {
+  role: "host" | "client";
+  transport: MultiplayerTransport;
+  localPlayer: VersusPlayer;
+  matchConfig: VersusMatchConfig;
+  readyPlayerIds: string[];
 };
 
 export function App(): ReactElement {
@@ -109,7 +135,11 @@ export function App(): ReactElement {
   const [summary, setSummary] = useState<RunEndedDetail | null>(null);
   const activeRunRef = useRef<GameBootConfig | null>(null);
   const summaryRef = useRef<RunEndedDetail | null>(null);
+  const multiplayerSessionRef = useRef<MultiplayerSession | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ChallengeCategory>("focus");
+  const [multiplayerSession, setMultiplayerSession] = useState<MultiplayerSession | null>(null);
+  const [multiplayerNotice, setMultiplayerNotice] = useState("");
+  const [versusResults, setVersusResults] = useState<VersusRunResult[]>([]);
   const [classicSpeedSettings, setClassicSpeedSettings] = useState<ClassicSpeedSettings>(() =>
     loadClassicSpeedSettings(),
   );
@@ -126,6 +156,10 @@ export function App(): ReactElement {
   useEffect(() => {
     summaryRef.current = summary;
   }, [summary]);
+
+  useEffect(() => {
+    multiplayerSessionRef.current = multiplayerSession;
+  }, [multiplayerSession]);
 
   useEffect(() => {
     replaceAppHistoryState("home", null);
@@ -171,6 +205,17 @@ export function App(): ReactElement {
       const savedAchievementState = saveAchievementState(update.state);
       setAchievementState(savedAchievementState);
       setSelectedCarSkinId(loadSelectedCarSkin());
+      if (event.detail.versusResult) {
+        mergeVersusResult(setVersusResults, event.detail.versusResult);
+        try {
+          multiplayerSessionRef.current?.transport.send({
+            type: "RUN_RESULT",
+            result: event.detail.versusResult,
+          });
+        } catch {
+          // The local summary still matters if the peer has already disconnected.
+        }
+      }
       setSummary({
         ...event.detail,
         unlockedAchievementIds: update.newlyUnlockedIds,
@@ -189,6 +234,107 @@ export function App(): ReactElement {
       window.removeEventListener(MENU_REQUEST_EVENT, handleMenuRequested);
     };
   }, []);
+
+  useEffect(() => {
+    if (!multiplayerSession) {
+      return undefined;
+    }
+
+    return multiplayerSession.transport.subscribe((message) => {
+      if (message.type === "HOST_ACCEPTED" && multiplayerSession.role === "host") {
+        setMultiplayerNotice("");
+        setMultiplayerSession({ ...multiplayerSession, matchConfig: message.matchConfig, readyPlayerIds: [] });
+        return;
+      }
+
+      if (message.type === "HOST_REJECTED" && multiplayerSession.role === "host") {
+        setMultiplayerNotice(message.hostName ? `${message.hostName} is already hosting this LAN lobby.` : message.reason);
+        multiplayerSession.transport.close();
+        setMultiplayerSession(null);
+        return;
+      }
+
+      if (message.type === "JOIN_REJECTED" && multiplayerSession.role === "client") {
+        setMultiplayerNotice(message.reason);
+        multiplayerSession.transport.close();
+        setMultiplayerSession(null);
+        return;
+      }
+
+      if (message.type === "HOST_LEFT" && multiplayerSession.role === "client") {
+        setMultiplayerNotice("The host left the LAN lobby.");
+        setVersusResults([]);
+        multiplayerSession.transport.close();
+        setMultiplayerSession(null);
+        return;
+      }
+
+      if (message.type === "JOIN_REQUEST" && multiplayerSession.role === "host") {
+        const nextConfig = addVersusPlayer(multiplayerSession.matchConfig, message.player);
+        setMultiplayerSession({ ...multiplayerSession, matchConfig: nextConfig, readyPlayerIds: [] });
+        multiplayerSession.transport.send({ type: "JOIN_ACCEPTED", matchConfig: nextConfig });
+        multiplayerSession.transport.send({ type: "LOBBY_STATE", matchConfig: nextConfig, readyPlayerIds: [] });
+        return;
+      }
+
+      if (message.type === "PLAYER_LEFT" && multiplayerSession.role === "host") {
+        const nextConfig = removeVersusPlayer(multiplayerSession.matchConfig, message.playerId);
+        const readyPlayerIds = multiplayerSession.readyPlayerIds.filter((playerId) => playerId !== message.playerId);
+        setVersusResults((current) => current.filter((result) => result.player.id !== message.playerId));
+        setMultiplayerSession({ ...multiplayerSession, matchConfig: nextConfig, readyPlayerIds });
+        multiplayerSession.transport.send({ type: "LOBBY_STATE", matchConfig: nextConfig, readyPlayerIds });
+        return;
+      }
+
+      if (message.type === "JOIN_ACCEPTED" && multiplayerSession.role === "client") {
+        setMultiplayerSession({ ...multiplayerSession, matchConfig: message.matchConfig, readyPlayerIds: [] });
+        return;
+      }
+
+      if (message.type === "MATCH_CONFIG") {
+        setMultiplayerSession({ ...multiplayerSession, matchConfig: message.matchConfig, readyPlayerIds: [] });
+        return;
+      }
+
+      if (message.type === "READY" && multiplayerSession.role === "host") {
+        const readyPlayerIds = addReadyPlayerId(multiplayerSession.readyPlayerIds, message.playerId);
+        setMultiplayerSession({ ...multiplayerSession, readyPlayerIds });
+        multiplayerSession.transport.send({
+          type: "LOBBY_STATE",
+          matchConfig: multiplayerSession.matchConfig,
+          readyPlayerIds,
+        });
+        return;
+      }
+
+      if (message.type === "LOBBY_STATE") {
+        setMultiplayerSession({
+          ...multiplayerSession,
+          matchConfig: message.matchConfig,
+          readyPlayerIds: message.readyPlayerIds,
+        });
+        return;
+      }
+
+      if (message.type === "START_RUN") {
+        setVersusResults([]);
+        const localPlayer = multiplayerSession.localPlayer;
+        setMultiplayerSession({ ...multiplayerSession, matchConfig: message.matchConfig, readyPlayerIds: [] });
+        window.setTimeout(() => {
+          startRun("versus", {
+            versusMatchConfig: message.matchConfig,
+            versusPlayer: localPlayer,
+            carCount: message.matchConfig.settings.carCount,
+          });
+        }, Math.max(0, message.startsAtEpochMs - Date.now()));
+        return;
+      }
+
+      if (message.type === "RUN_RESULT") {
+        mergeVersusResult(setVersusResults, message.result);
+      }
+    });
+  }, [multiplayerSession]);
 
   useEffect(() => {
     document.body.dataset.screen = screen === "home" ? "menu" : screen;
@@ -281,11 +427,43 @@ export function App(): ReactElement {
       {screen === "home" ? (
         <HomeScreen
           onClassic={() => navigateToStaticScreen("classic-select")}
+          onFriendBattle={() => navigateToStaticScreen("friend-battle")}
           onChallenge={() => navigateToStaticScreen("challenge-select")}
           onPractice={() => navigateToStaticScreen("practice-select")}
           onDaily={() => startRun("daily")}
           onGarage={() => navigateToStaticScreen("garage")}
           onSettings={() => navigateToStaticScreen("settings")}
+        />
+      ) : null}
+
+      {screen === "friend-battle" ? (
+        <FriendBattleScreen
+          onBack={goBack}
+          classicSpeedSettings={classicSpeedSettings}
+          gameplayModifierSettings={gameplayModifierSettings}
+          multiplayerSession={multiplayerSession}
+          multiplayerNotice={multiplayerNotice}
+          versusResults={versusResults}
+          onSessionChange={setMultiplayerSession}
+          onNoticeChange={setMultiplayerNotice}
+          onResultsClear={() => setVersusResults([])}
+          onStart={(matchConfig, localPlayer) => {
+            setVersusResults([]);
+            setMultiplayerSession((current) => current ? { ...current, matchConfig, readyPlayerIds: [] } : current);
+            const startsAtEpochMs = Date.now() + 1200;
+            multiplayerSession?.transport.send({
+              type: "START_RUN",
+              matchConfig,
+              startsAtEpochMs,
+            });
+            window.setTimeout(() => {
+              startRun("versus", {
+                versusMatchConfig: matchConfig,
+                versusPlayer: localPlayer,
+                carCount: matchConfig.settings.carCount,
+              });
+            }, Math.max(0, startsAtEpochMs - Date.now()));
+          }}
         />
       ) : null}
 
@@ -347,6 +525,8 @@ export function App(): ReactElement {
               { replace: true },
             )
           }
+          versusMatchConfig={multiplayerSession?.matchConfig}
+          versusResults={versusResults}
         />
       ) : null}
     </main>
@@ -387,6 +567,7 @@ function PhaserMount({ bootConfig }: { bootConfig: GameBootConfig }): ReactEleme
 
 function HomeScreen({
   onClassic,
+  onFriendBattle,
   onChallenge,
   onPractice,
   onDaily,
@@ -394,6 +575,7 @@ function HomeScreen({
   onSettings,
 }: {
   onClassic: () => void;
+  onFriendBattle: () => void;
   onChallenge: () => void;
   onPractice: () => void;
   onDaily: () => void;
@@ -432,6 +614,13 @@ function HomeScreen({
               detail="Endless road pressure with deterministic skill patterns."
               accent="cyan"
               onClick={onClassic}
+            />
+            <ModeButton
+              icon={<Users />}
+              title="Friends Battle"
+              detail="Offline real-time group battle over a same-hotspot LAN server."
+              accent="cyan"
+              onClick={onFriendBattle}
             />
             <ModeButton
               icon={<Trophy />}
@@ -522,6 +711,603 @@ function CrawlableHomeSections(): ReactElement {
         </div>
       </div>
     </section>
+  );
+}
+
+function FriendBattleScreen({
+  onBack,
+  classicSpeedSettings,
+  gameplayModifierSettings,
+  multiplayerSession,
+  multiplayerNotice,
+  versusResults,
+  onSessionChange,
+  onNoticeChange,
+  onResultsClear,
+  onStart,
+}: {
+  onBack: () => void;
+  classicSpeedSettings: ClassicSpeedSettings;
+  gameplayModifierSettings: GameplayModifierSettings;
+  multiplayerSession: MultiplayerSession | null;
+  multiplayerNotice: string;
+  versusResults: VersusRunResult[];
+  onSessionChange: (session: MultiplayerSession | null) => void;
+  onNoticeChange: (notice: string) => void;
+  onResultsClear: () => void;
+  onStart: (matchConfig: VersusMatchConfig, localPlayer: VersusPlayer) => void;
+}): ReactElement {
+  const [playerName, setPlayerName] = useState(() => loadVersusPlayerName());
+  const [connectionState, setConnectionState] = useState<MultiplayerConnectionState>("idle");
+  const [lanServerUrl, setLanServerUrl] = useState(() => getDefaultLanServerUrl());
+  const [error, setError] = useState("");
+  const [settings, setSettings] = useState(() =>
+    normalizeVersusSettings({
+      carCount: 2,
+      speedLevelMin: classicSpeedSettings.minLevel,
+      speedLevelMax: classicSpeedSettings.maxLevel,
+      modifierSettings: gameplayModifierSettings,
+      endless: true,
+    }),
+  );
+
+  const outcome = multiplayerSession
+    ? calculateVersusOutcome(multiplayerSession.matchConfig.players, versusResults)
+    : null;
+  const isHost = multiplayerSession?.role === "host";
+  const canEditSettings = isHost;
+  const isReady = Boolean(multiplayerSession?.readyPlayerIds.includes(multiplayerSession.localPlayer.id));
+  const allLobbyPlayersReady = Boolean(
+    multiplayerSession &&
+    multiplayerSession.matchConfig.players.length >= 2 &&
+    multiplayerSession.matchConfig.players.every((player) => multiplayerSession.readyPlayerIds.includes(player.id)),
+  );
+  const canHostStart = multiplayerSession?.role === "host" &&
+    multiplayerSession.transport.state === "connected" &&
+    allLobbyPlayersReady;
+
+  useEffect(() => {
+    if (!multiplayerSession) {
+      return;
+    }
+
+    setSettings(multiplayerSession.matchConfig.settings);
+  }, [multiplayerSession?.matchConfig.settings, multiplayerSession]);
+
+  const connectLanHost = () => {
+    if (multiplayerSession) {
+      onNoticeChange("This device is already connected to the lobby.");
+      return;
+    }
+
+    try {
+      const localPlayer = createVersusPlayerWithId(playerName, getVersusPlayerId("leader"));
+      setError("");
+      onNoticeChange("");
+      onResultsClear();
+      const transport = new LanSocketTransport("host", lanServerUrl);
+      const matchConfig = {
+        ...createVersusMatchConfig(playerName, settings),
+        leader: localPlayer,
+        players: [localPlayer],
+      };
+      saveVersusPlayerName(localPlayer.name);
+      transport.subscribeState((state) => {
+        setConnectionState(state);
+        if (state === "connected") {
+          transport.send({ type: "HOST_CLAIM", matchConfig });
+        }
+      });
+      onSessionChange({
+        role: "host",
+        transport,
+        localPlayer,
+        matchConfig,
+        readyPlayerIds: [],
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not connect to LAN server.");
+    }
+  };
+
+  const connectLanJoin = () => {
+    if (multiplayerSession) {
+      onNoticeChange("This device is already connected to the lobby.");
+      return;
+    }
+
+    try {
+      const localPlayer = createVersusPlayerWithId(playerName, getVersusPlayerId("friend"));
+      setError("");
+      onNoticeChange("");
+      onResultsClear();
+      const transport = new LanSocketTransport("client", lanServerUrl);
+      saveVersusPlayerName(localPlayer.name);
+      transport.subscribeState((state) => {
+        setConnectionState(state);
+        if (state === "connected") {
+          transport.send({ type: "JOIN_REQUEST", player: localPlayer });
+        }
+      });
+      const placeholderConfig = addVersusPlayer(createVersusMatchConfig("Leader", settings), localPlayer);
+      onSessionChange({
+        role: "client",
+        transport,
+        localPlayer,
+        matchConfig: placeholderConfig,
+        readyPlayerIds: [],
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not connect to LAN server.");
+    }
+  };
+
+  const closeSession = () => {
+    try {
+      if (multiplayerSession?.role === "host") {
+        multiplayerSession.transport.send({ type: "HOST_LEFT" });
+      } else if (multiplayerSession?.role === "client") {
+        multiplayerSession.transport.send({
+          type: "PLAYER_LEFT",
+          playerId: multiplayerSession.localPlayer.id,
+        });
+      }
+    } catch {
+      // Closing the local socket still clears this device if the server is already gone.
+    }
+
+    multiplayerSession?.transport.close();
+    onSessionChange(null);
+    onNoticeChange("");
+    setConnectionState("idle");
+    onResultsClear();
+  };
+
+  const updateMatchSettings = (nextSettings: typeof settings) => {
+    if (!canEditSettings) {
+      return;
+    }
+
+    setSettings(nextSettings);
+    if (!multiplayerSession) {
+      return;
+    }
+
+    const nextConfig = {
+      ...multiplayerSession.matchConfig,
+      settings: nextSettings,
+    };
+    onSessionChange({
+      ...multiplayerSession,
+      matchConfig: nextConfig,
+      readyPlayerIds: [],
+    });
+    multiplayerSession.transport.send({ type: "MATCH_CONFIG", matchConfig: nextConfig });
+    multiplayerSession.transport.send({ type: "LOBBY_STATE", matchConfig: nextConfig, readyPlayerIds: [] });
+  };
+
+  const markReady = () => {
+    if (!multiplayerSession || isReady) {
+      return;
+    }
+
+    if (multiplayerSession.role === "host") {
+      const readyPlayerIds = addReadyPlayerId(multiplayerSession.readyPlayerIds, multiplayerSession.localPlayer.id);
+      onSessionChange({ ...multiplayerSession, readyPlayerIds });
+      multiplayerSession.transport.send({
+        type: "LOBBY_STATE",
+        matchConfig: multiplayerSession.matchConfig,
+        readyPlayerIds,
+      });
+      return;
+    }
+
+    multiplayerSession.transport.send({ type: "READY", playerId: multiplayerSession.localPlayer.id });
+  };
+
+  const handlePowerUpToggle = (id: PowerUpId) => {
+    updateMatchSettings({
+      ...settings,
+      modifierSettings: {
+        ...settings.modifierSettings,
+        powerUps: {
+          ...settings.modifierSettings.powerUps,
+          [id]: !settings.modifierSettings.powerUps[id],
+        },
+      },
+    });
+  };
+
+  const handleObstacleToggle = (id: ObstacleVarietyId) => {
+    updateMatchSettings({
+      ...settings,
+      modifierSettings: {
+        ...settings.modifierSettings,
+        obstacleVariety: {
+          ...settings.modifierSettings.obstacleVariety,
+          [id]: !settings.modifierSettings.obstacleVariety[id],
+        },
+      },
+    });
+  };
+
+  return (
+    <ScreenShell>
+      <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-5 px-5 py-7 sm:px-8">
+        <TopBar title="Friends Battle" detail="Use Host on the leader device and Join on each friend's device while everyone is connected to the same hotspot or Wi-Fi." onBack={onBack} />
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+          <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyanline text-ink">
+                <Wifi />
+              </span>
+              <div>
+                <h2 className="text-2xl font-black">LAN Connection</h2>
+                <p className="mt-1 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                  {formatConnectionState(connectionState)}
+                </p>
+              </div>
+            </div>
+
+            <section className="mt-5 rounded-2xl border border-cyanline/25 bg-cyanline/8 p-4">
+              <h3 className="text-lg font-black">Simple Same-Hotspot Connect</h3>
+              <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-300">
+                Run the LAN server on the laptop, open the laptop's network URL on the phone, then connect both devices to the same server.
+              </p>
+              <label className="mt-3 block">
+                <span className="block text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                  Your name
+                </span>
+                <input
+                  value={playerName}
+                  onChange={(event) => {
+                    setPlayerName(event.target.value);
+                    saveVersusPlayerName(event.target.value);
+                  }}
+                  disabled={Boolean(multiplayerSession)}
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-ink/80 px-3 py-3 text-base font-black text-slate-50 outline-none transition focus:border-cyanline"
+                />
+              </label>
+              <label className="mt-3 block">
+                <span className="block text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                  LAN server
+                </span>
+                <input
+                  value={lanServerUrl}
+                  onChange={(event) => setLanServerUrl(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-ink/80 px-3 py-3 text-sm font-black text-slate-50 outline-none transition focus:border-cyanline"
+                />
+              </label>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={Boolean(multiplayerSession)}
+                  onClick={connectLanHost}
+                  className="rounded-2xl bg-cyanline px-4 py-3 font-black text-ink shadow-glow disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Host on this device
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(multiplayerSession)}
+                  onClick={connectLanJoin}
+                  className="rounded-2xl bg-goldline px-4 py-3 font-black text-ink shadow-gold disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Join from this device
+                </button>
+              </div>
+            </section>
+
+            {error || multiplayerNotice ? (
+              <div className="mt-4 rounded-2xl border border-dangerline/30 bg-dangerline/10 px-4 py-3 text-sm font-bold text-rose-100">
+                {error || multiplayerNotice}
+              </div>
+            ) : null}
+
+            <MatchPlayersPanel
+              matchConfig={multiplayerSession?.matchConfig ?? null}
+              localRole={multiplayerSession?.role ?? null}
+              readyPlayerIds={multiplayerSession?.readyPlayerIds ?? []}
+            />
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={!multiplayerSession || isReady}
+                onClick={markReady}
+                className="rounded-2xl border border-goldline/40 bg-goldline/12 px-5 py-4 font-black text-goldline disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {isReady ? "Ready" : "I Am Ready"}
+              </button>
+              <button
+                type="button"
+                disabled={!canHostStart}
+                onClick={() => {
+                  if (!multiplayerSession) {
+                    return;
+                  }
+
+                  onStart({ ...multiplayerSession.matchConfig, settings }, multiplayerSession.localPlayer);
+                }}
+                className="rounded-2xl bg-cyanline px-5 py-4 font-black text-ink shadow-glow disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Start Synced Race
+              </button>
+              <button
+                type="button"
+                onClick={closeSession}
+                className="rounded-2xl border border-white/10 bg-white/8 px-5 py-4 font-black"
+              >
+                Reset Connection
+              </button>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-goldline text-ink">
+                  <Users />
+                </span>
+                <div>
+                  <h2 className="text-2xl font-black">Match Config</h2>
+                  <p className="mt-1 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                    {canEditSettings ? "Host controls" : "Host only"}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <VersusSelect
+                  label="Cars"
+                  value={String(settings.carCount)}
+                  options={["1", "2"]}
+                  disabled={!canEditSettings}
+                  onChange={(value) => updateMatchSettings({ ...settings, carCount: normalizeVersusSettings({ carCount: Number(value) }).carCount })}
+                />
+                <VersusSelect
+                  label="Mode"
+                  value={settings.endless ? "endless" : "timed"}
+                  options={["endless", "timed"]}
+                  disabled={!canEditSettings}
+                  onChange={(value) => updateMatchSettings({ ...settings, endless: value === "endless" })}
+                />
+                <VersusSelect
+                  label="Min speed"
+                  value={String(settings.speedLevelMin)}
+                  options={SPEED_LEVEL_OPTIONS.map(String)}
+                  disabled={!canEditSettings}
+                  onChange={(value) => {
+                    const speedLevelMin = Number(value);
+                    updateMatchSettings({
+                      ...settings,
+                      speedLevelMin,
+                      speedLevelMax: Math.max(speedLevelMin, settings.speedLevelMax),
+                    });
+                  }}
+                />
+                <VersusSelect
+                  label="Max speed"
+                  value={String(settings.speedLevelMax)}
+                  options={SPEED_LEVEL_OPTIONS.map(String)}
+                  disabled={!canEditSettings}
+                  onChange={(value) => {
+                    const speedLevelMax = Number(value);
+                    updateMatchSettings({
+                      ...settings,
+                      speedLevelMin: Math.min(settings.speedLevelMin, speedLevelMax),
+                      speedLevelMax,
+                    });
+                  }}
+                />
+              </div>
+              {!settings.endless ? (
+                <label className="mt-3 block rounded-2xl bg-white/6 px-4 py-3">
+                  <span className="block text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                    Duration seconds
+                  </span>
+                  <input
+                    type="number"
+                    min={15}
+                    max={300}
+                    value={Math.round(settings.durationMs / 1000)}
+                    disabled={!canEditSettings}
+                    onChange={(event) => updateMatchSettings({ ...settings, durationMs: Number(event.target.value) * 1000 })}
+                    className="mt-3 w-full rounded-2xl border border-white/10 bg-ink/80 px-3 py-3 text-base font-black text-slate-50 outline-none transition focus:border-cyanline"
+                  />
+                </label>
+              ) : null}
+            </section>
+
+            <ModifierPanel
+              icon={<Shield />}
+              title="Power Ups"
+              detail="These settings are embedded into the shared match seed."
+              options={POWER_UP_OPTIONS}
+              values={settings.modifierSettings.powerUps}
+              disabled={!canEditSettings}
+              onToggle={(id) => handlePowerUpToggle(id as PowerUpId)}
+            />
+            <ModifierPanel
+              icon={<Target />}
+              title="Obstacle Variety"
+              detail="Both devices receive the same obstacle variety config."
+              options={OBSTACLE_VARIETY_OPTIONS}
+              values={settings.modifierSettings.obstacleVariety}
+              disabled={!canEditSettings}
+              onToggle={(id) => handleObstacleToggle(id as ObstacleVarietyId)}
+            />
+            <VersusResultPanel
+              matchConfig={multiplayerSession?.matchConfig ?? null}
+              results={versusResults}
+              outcome={outcome}
+            />
+          </section>
+        </div>
+      </section>
+    </ScreenShell>
+  );
+}
+
+function VersusSelect({
+  label,
+  value,
+  options,
+  disabled = false,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}): ReactElement {
+  return (
+    <label className="rounded-2xl bg-white/6 px-4 py-3">
+      <span className="block text-xs font-black uppercase tracking-[0.18em] text-slate-400">{label}</span>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-3 w-full rounded-2xl border border-white/10 bg-ink/80 px-3 py-3 text-base font-black text-slate-50 outline-none transition focus:border-cyanline disabled:cursor-not-allowed disabled:opacity-55"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function MatchPlayersPanel({
+  matchConfig,
+  localRole,
+  readyPlayerIds,
+}: {
+  matchConfig: VersusMatchConfig | null;
+  localRole: MultiplayerRole | null;
+  readyPlayerIds: string[];
+}): ReactElement {
+  return (
+    <section className="mt-4 rounded-2xl border border-white/10 bg-white/6 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Lobby</p>
+          <h3 className="mt-1 text-xl font-black">
+            {matchConfig ? `${matchConfig.players.length} connected` : "No lobby yet"}
+          </h3>
+          {matchConfig ? (
+            <p className="mt-1 text-xs font-bold text-slate-400">
+              {readyPlayerIds.length}/{matchConfig.players.length} ready
+            </p>
+          ) : null}
+        </div>
+        <span className="rounded-xl bg-white/10 px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-300">
+          {localRole === "host" ? "You host" : localRole === "client" ? "You joined" : "Idle"}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <div className="rounded-xl bg-ink/60 px-3 py-2 text-sm font-bold text-slate-200">
+          Host: {matchConfig?.leader.name ?? "Waiting"}
+        </div>
+        {(matchConfig?.players ?? []).map((player) => (
+          <div key={player.id} className="flex items-center justify-between rounded-xl bg-white/7 px-3 py-2 text-sm font-bold">
+            <span>{player.name}</span>
+            <span className="text-xs uppercase tracking-[0.14em] text-slate-400">
+              {readyPlayerIds.includes(player.id) ? "Ready" : player.id === matchConfig?.leader.id ? "Host" : "Waiting"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function VersusResultPanel({
+  matchConfig,
+  results,
+  outcome,
+}: {
+  matchConfig: VersusMatchConfig | null;
+  results: VersusRunResult[];
+  outcome: ReturnType<typeof calculateVersusOutcome> | null;
+}): ReactElement | null {
+  if (!matchConfig || results.length === 0 || !outcome) {
+    return null;
+  }
+
+  const share = () => {
+    const text = formatVersusShareText(matchConfig, results);
+    if (navigator.share) {
+      void navigator.share({ text });
+      return;
+    }
+
+    void navigator.clipboard?.writeText(text);
+  };
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-goldline">Match Result</p>
+          <h3 className="mt-2 text-2xl font-black">
+            {outcome.status === "winner"
+              ? `${outcome.winner.name} wins`
+              : outcome.status === "tie"
+                ? "Tie"
+                : "Waiting for players"}
+          </h3>
+        </div>
+        <button type="button" onClick={share} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 text-sm font-black">
+          Share
+        </button>
+      </div>
+      <VersusLeaderboard players={matchConfig.players} results={results} />
+    </section>
+  );
+}
+
+function VersusLeaderboard({
+  players,
+  results,
+}: {
+  players: VersusPlayer[];
+  results: VersusRunResult[];
+}): ReactElement {
+  const sortedResults = sortVersusResults(results);
+  const finishedPlayerIds = new Set(sortedResults.map((result) => result.player.id));
+  const pendingPlayers = players.filter((player) => !finishedPlayerIds.has(player.id));
+
+  return (
+    <div className="mt-4 grid gap-2">
+      {sortedResults.map((result, index) => (
+        <div key={result.player.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-white/6 px-4 py-3 text-sm font-black">
+          <span className={`grid h-8 w-8 place-items-center rounded-xl ${index === 0 ? "bg-goldline text-ink" : "bg-white/10 text-slate-200"}`}>
+            #{index + 1}
+          </span>
+          <div>
+            <p className="text-slate-100">{result.player.name}</p>
+            <p className="mt-1 text-xs font-bold text-slate-400">
+              {Math.round(result.timeMs / 100) / 10}s · speed {result.speedLevel}
+            </p>
+          </div>
+          <span className="text-2xl text-goldline">{result.score}</span>
+        </div>
+      ))}
+      {pendingPlayers.map((player) => (
+        <div key={player.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-white/6 px-4 py-3 text-sm font-black opacity-80">
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 text-slate-300">-</span>
+          <div>
+            <p className="text-slate-100">{player.name}</p>
+            <p className="mt-1 text-xs font-bold text-slate-400">Still racing or waiting for result</p>
+          </div>
+          <span className="text-lg text-slate-400">Pending</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -912,15 +1698,23 @@ function SummaryOverlay({
   detail,
   onBack,
   onReplay,
+  versusMatchConfig,
+  versusResults,
 }: {
   detail: RunEndedDetail;
   onBack: () => void;
   onReplay: () => void;
+  versusMatchConfig?: VersusMatchConfig;
+  versusResults?: VersusRunResult[];
 }): ReactElement {
   const { summary } = detail;
   const [showReplay, setShowReplay] = useState(false);
-  const backLabel = summary.modeId === "classic" || summary.modeId === "challenge" || summary.modeId === "practice" ? "Back" : "Menu";
-  const canReplayMistake = summary.result === "failed" && Boolean(detail.replay?.frames.length && detail.replay.frames.length > 1);
+  const isVersusSummary = summary.modeId === "versus";
+  const backLabel = summary.modeId === "classic" || summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "versus" ? "Back" : "Menu";
+  const canReplayMistake = !isVersusSummary && summary.result === "failed" && Boolean(detail.replay?.frames.length && detail.replay.frames.length > 1);
+  const versusOutcome = versusMatchConfig && versusResults
+    ? calculateVersusOutcome(versusMatchConfig.players, versusResults)
+    : null;
 
   useEffect(() => {
     document.body.dataset.screen = "summary";
@@ -932,6 +1726,11 @@ function SummaryOverlay({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "r" || event.key === "R" || event.key === "Enter") {
         event.preventDefault();
+        if (isVersusSummary) {
+          onBack();
+          return;
+        }
+
         onReplay();
       }
 
@@ -943,7 +1742,7 @@ function SummaryOverlay({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onBack, onReplay]);
+  }, [isVersusSummary, onBack, onReplay]);
 
   return (
     <div className="fixed inset-0 z-20 grid place-items-center bg-ink/55 px-5 backdrop-blur-sm">
@@ -980,11 +1779,27 @@ function SummaryOverlay({
           </div>
         ) : null}
 
-        <div className="mt-6 grid grid-cols-3 gap-3">
-          <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? "Progress" : "Score"} value={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? `${summary.completedPercent}%` : summary.score} />
-          <ScoreTile label={summary.modeId === "practice" ? "Best" : summary.modeId === "daily" ? "Best" : "Best"} value={summary.modeId === "challenge" || summary.modeId === "practice" ? `${summary.bestScore}%` : summary.bestScore} />
-          <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "daily" ? "Stars" : summary.modeId === "practice" ? "Drill" : "Speed"} value={summary.modeId === "challenge" || summary.modeId === "daily" ? `${summary.stars ?? 0}/3` : summary.modeId === "practice" ? "Local" : summary.speedLevel} />
-        </div>
+        {!isVersusSummary ? (
+          <div className="mt-6 grid grid-cols-3 gap-3">
+            <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? "Progress" : "Score"} value={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? `${summary.completedPercent}%` : summary.score} />
+            <ScoreTile label={summary.modeId === "practice" ? "Best" : summary.modeId === "daily" ? "Best" : "Best"} value={summary.modeId === "challenge" || summary.modeId === "practice" ? `${summary.bestScore}%` : summary.bestScore} />
+            <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "daily" ? "Stars" : summary.modeId === "practice" ? "Drill" : "Speed"} value={summary.modeId === "challenge" || summary.modeId === "daily" ? `${summary.stars ?? 0}/3` : summary.modeId === "practice" ? "Local" : summary.speedLevel} />
+          </div>
+        ) : null}
+
+        {versusOutcome ? (
+          <div className="mt-5 rounded-2xl border border-cyanline/25 bg-cyanline/8 px-4 py-3 text-left">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-cyanline">Friends Battle</p>
+            <p className="mt-2 text-sm font-bold text-slate-100">
+              {versusOutcome.status === "winner"
+                ? `${versusOutcome.winner.name} leads by ${versusOutcome.margin}`
+                : versusOutcome.status === "tie"
+                  ? `Tie at ${versusOutcome.score}`
+                  : `Waiting for ${versusOutcome.totalCount - versusOutcome.completedCount} player(s)`}
+            </p>
+            <VersusLeaderboard players={versusMatchConfig?.players ?? []} results={versusResults ?? []} />
+          </div>
+        ) : null}
 
         {canReplayMistake ? (
           <button
@@ -996,13 +1811,15 @@ function SummaryOverlay({
           </button>
         ) : null}
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className={`mt-3 grid gap-3 ${isVersusSummary ? "grid-cols-1" : "grid-cols-2"}`}>
           <button type="button" onClick={onBack} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4 font-black text-slate-100">
-            {backLabel}
+            {isVersusSummary ? "Back To Lobby" : backLabel}
           </button>
-          <button type="button" onClick={onReplay} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyanline px-4 py-4 font-black text-ink shadow-glow">
-            <RotateCcw size={18} /> Again
-          </button>
+          {!isVersusSummary ? (
+            <button type="button" onClick={onReplay} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyanline px-4 py-4 font-black text-ink shadow-glow">
+              <RotateCcw size={18} /> Again
+            </button>
+          ) : null}
         </div>
       </section>
       {showReplay && detail.replay ? (
@@ -1237,6 +2054,7 @@ function ModifierPanel({
   detail,
   options,
   values,
+  disabled = false,
   onToggle,
 }: {
   icon: ReactElement;
@@ -1244,6 +2062,7 @@ function ModifierPanel({
   detail: string;
   options: GameplayModifierMeta[];
   values: Partial<Record<string, boolean>>;
+  disabled?: boolean;
   onToggle: (id: string) => void;
 }): ReactElement {
   const enabledCount = options.filter((option) => values[option.id] === true).length;
@@ -1269,15 +2088,16 @@ function ModifierPanel({
           return (
             <label
               key={option.id}
-              className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition ${
+              className={`flex items-start gap-3 rounded-2xl border px-4 py-3 transition ${
                 enabled
                   ? "border-cyanline/50 bg-cyanline/12 text-slate-50"
                   : "border-white/8 bg-white/6 text-slate-300 hover:border-white/16"
-              }`}
+              } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
             >
               <input
                 type="checkbox"
                 checked={enabled}
+                disabled={disabled}
                 onChange={() => onToggle(option.id)}
                 className="mt-1 h-5 w-5 accent-cyanline"
               />
@@ -1845,7 +2665,7 @@ function isTrackLocked(track: AuthoredTrack): boolean {
 }
 
 function getRunKey(run: GameBootConfig): string {
-  return `${run.mode}-${run.trackId ?? run.drillId ?? ""}-${run.runIndex ?? 0}-${run.carCount ?? ""}`;
+  return `${run.mode}-${run.trackId ?? run.drillId ?? run.versusMatchConfig?.matchId ?? ""}-${run.versusPlayer?.id ?? ""}-${run.runIndex ?? 0}-${run.carCount ?? ""}`;
 }
 
 function getRunReturnScreen(mode: PlayMode): Exclude<AppScreen, "gameplay" | "summary"> {
@@ -1861,7 +2681,78 @@ function getRunReturnScreen(mode: PlayMode): Exclude<AppScreen, "gameplay" | "su
     return "practice-select";
   }
 
+  if (mode === "versus") {
+    return "friend-battle";
+  }
+
   return "home";
+}
+
+function mergeVersusResult(
+  setResults: (updater: (results: VersusRunResult[]) => VersusRunResult[]) => void,
+  result: VersusRunResult,
+): void {
+  setResults((current) => {
+    const existingIndex = current.findIndex((candidate) => candidate.player.id === result.player.id);
+    if (existingIndex < 0) {
+      return [...current, result];
+    }
+
+    return current.map((candidate, index) => (index === existingIndex ? result : candidate));
+  });
+}
+
+function addReadyPlayerId(readyPlayerIds: string[], playerId: string): string[] {
+  return readyPlayerIds.includes(playerId) ? readyPlayerIds : [...readyPlayerIds, playerId];
+}
+
+function getVersusPlayerId(prefix: "leader" | "friend"): string {
+  const stored = window.localStorage.getItem(VERSUS_PLAYER_ID_KEY);
+  if (stored) {
+    return stored;
+  }
+
+  const generated = `${prefix}-${Date.now().toString(36)}`;
+  window.localStorage.setItem(VERSUS_PLAYER_ID_KEY, generated);
+  return generated;
+}
+
+function loadVersusPlayerName(): string {
+  return window.localStorage.getItem(VERSUS_PLAYER_NAME_KEY) ?? "Player";
+}
+
+function saveVersusPlayerName(name: string): void {
+  window.localStorage.setItem(VERSUS_PLAYER_NAME_KEY, name);
+}
+
+function sortVersusResults(results: VersusRunResult[]): VersusRunResult[] {
+  return [...results].sort((left, right) => {
+    if (left.score !== right.score) {
+      return right.score - left.score;
+    }
+
+    if (left.timeMs !== right.timeMs) {
+      return right.timeMs - left.timeMs;
+    }
+
+    return right.speedLevel - left.speedLevel;
+  });
+}
+
+function formatConnectionState(state: MultiplayerConnectionState): string {
+  switch (state) {
+    case "connecting":
+      return "Connecting";
+    case "connected":
+      return "Connected";
+    case "failed":
+      return "Connection failed";
+    case "closed":
+      return "Closed";
+    case "idle":
+    default:
+      return "Not connected";
+  }
 }
 
 function pushAppHistoryState(screen: AppScreen, activeRun: GameBootConfig | null): void {

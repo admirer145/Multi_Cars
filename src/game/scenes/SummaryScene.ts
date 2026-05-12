@@ -16,7 +16,7 @@ const LANE_X: Record<RoadSide, [number, number]> = {
 export type SummarySceneData = {
   summary: RunSummary;
   nextRunIndex: number;
-  mode: "classic" | "challenge";
+  mode: "classic" | "challenge" | "practice" | "daily" | "versus";
   trackId?: string;
   finalState?: SimulationState;
 };

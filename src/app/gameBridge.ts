@@ -2,9 +2,14 @@ import type { RunSummary, SimulationState } from "../core/types";
 import type { AchievementId } from "../core/engagement/achievements";
 import type { ReplayClip } from "../core/replay/replayBuffer";
 import type { SupportedClassicCarCount } from "../core/constants";
+import type {
+  VersusMatchConfig,
+  VersusPlayer,
+  VersusRunResult,
+} from "../core/multiplayer/versusMode";
 
-export type AppScreen = "home" | "classic-select" | "challenge-select" | "practice-select" | "garage" | "settings" | "gameplay" | "summary";
-export type PlayMode = "classic" | "challenge" | "practice" | "daily";
+export type AppScreen = "home" | "classic-select" | "challenge-select" | "practice-select" | "friend-battle" | "garage" | "settings" | "gameplay" | "summary";
+export type PlayMode = "classic" | "challenge" | "practice" | "daily" | "versus";
 
 export type GameBootConfig = {
   mode: PlayMode;
@@ -12,6 +17,8 @@ export type GameBootConfig = {
   trackId?: string;
   drillId?: string;
   carCount?: SupportedClassicCarCount;
+  versusMatchConfig?: VersusMatchConfig;
+  versusPlayer?: VersusPlayer;
 };
 
 export type RunEndedDetail = {
@@ -21,6 +28,7 @@ export type RunEndedDetail = {
   trackId?: string;
   drillId?: string;
   carCount?: SupportedClassicCarCount;
+  versusResult?: VersusRunResult;
   unlockedAchievementIds?: AchievementId[];
   finalState?: SimulationState;
   replay?: ReplayClip;

@@ -31,10 +31,13 @@ export function validatePattern(
   const issues: PatternValidationIssue[] = [];
   const ids = new Set<string>();
   const sideTimeKeys = new Set<string>();
-  const sortedBySide: Record<RoadSide, PatternEvent[]> = {
-    left: [],
-    right: [],
-  };
+  const sortedBySide = ROAD_SIDES.reduce(
+    (record, side) => ({
+      ...record,
+      [side]: [],
+    }),
+    {} as Record<RoadSide, PatternEvent[]>,
+  );
   const minSameSideGapMs = options.minSameSideGapMs ?? DEFAULT_MIN_SAME_SIDE_GAP_MS;
 
   if (events.length === 0) {

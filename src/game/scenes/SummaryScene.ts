@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../../app/gameConfig";
-import { COLLECTION_Y } from "../../core/constants";
+import { COLLECTION_Y, getActiveRoadSides, type SupportedClassicCarCount } from "../../core/constants";
 import type { ActiveObjectState, RoadSide, RunSummary, SimulationState } from "../../core/types";
 
 const TEXT_COLOR = "#f8fafc";
@@ -8,9 +8,17 @@ const MUTED_TEXT_COLOR = "#cbd5e1";
 const PANEL_COLOR = 0x171d27;
 const PRIMARY_COLOR = 0x3dd6c6;
 const SECONDARY_TEXT_COLOR = "#ffd166";
-const LANE_X: Record<RoadSide, [number, number]> = {
-  left: [146, 282],
-  right: [438, 574],
+const LANE_X_BY_CAR_COUNT: Record<SupportedClassicCarCount, Record<RoadSide, [number, number]>> = {
+  1: { left: [252, 468], right: [438, 574], third: [438, 574], fourth: [438, 574] },
+  2: { left: [146, 282], right: [438, 574], third: [438, 574], fourth: [438, 574] },
+  3: { left: [60, 190], right: [295, 425], third: [530, 660], fourth: [530, 660] },
+  4: { left: [55, 125], right: [235, 305], third: [415, 485], fourth: [595, 665] },
+};
+const SUMMARY_CAR_COLORS: Record<RoadSide, number> = {
+  left: 0x3dd6c6,
+  right: 0xffd166,
+  third: 0xfb7185,
+  fourth: 0x93c5fd,
 };
 
 export type SummarySceneData = {
@@ -110,8 +118,10 @@ export class SummaryScene extends Phaser.Scene {
       return;
     }
 
-    this.drawSummaryCar(graphics, LANE_X.left[state.cars.left.lane], COLLECTION_Y, 0x3dd6c6);
-    this.drawSummaryCar(graphics, LANE_X.right[state.cars.right.lane], COLLECTION_Y, 0xffd166);
+    const laneX = getSummaryLaneX(state.carCount);
+    for (const side of getActiveRoadSides(state.carCount)) {
+      this.drawSummaryCar(graphics, laneX[side][state.cars[side].lane], COLLECTION_Y, SUMMARY_CAR_COLORS[side]);
+    }
     state.objects.slice(-8).forEach((object) => this.drawSummaryObject(graphics, object));
   }
 
@@ -129,7 +139,7 @@ export class SummaryScene extends Phaser.Scene {
       return;
     }
 
-    const x = LANE_X[object.side][object.lane];
+    const x = getSummaryLaneX(this.dataForScene.finalState?.carCount ?? 2)[object.side][object.lane];
     if (object.kind === "collectible") {
       graphics.fillStyle(0x6ee7b7, 0.82);
       graphics.fillCircle(x, object.y, 28);
@@ -198,6 +208,10 @@ function formatStats(summary: RunSummary): string {
   }
 
   return `Score ${summary.score}\nBest ${summary.bestScore}\nSpeed ${summary.speedLevel}`;
+}
+
+function getSummaryLaneX(carCount: SupportedClassicCarCount): Record<RoadSide, [number, number]> {
+  return LANE_X_BY_CAR_COUNT[carCount];
 }
 
 function formatFailureReason(reason: string | undefined): string {

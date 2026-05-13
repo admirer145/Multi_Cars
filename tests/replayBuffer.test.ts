@@ -48,6 +48,8 @@ function createState(timeMs: number, status: SimulationState["status"] = "runnin
     cars: {
       left: { side: "left", lane: 0 },
       right: { side: "right", lane: 1 },
+      third: { side: "third", lane: 0 },
+      fourth: { side: "fourth", lane: 1 },
     },
     objects: [],
     score: 1,

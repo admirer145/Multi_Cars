@@ -1,13 +1,17 @@
-export const ROAD_SIDES = ["left", "right"] as const;
+export const ROAD_SIDES = ["left", "right", "third", "fourth"] as const;
 export const LANES = [0, 1] as const;
-export const SUPPORTED_CLASSIC_CAR_COUNTS = [1, 2] as const;
+export const SUPPORTED_CLASSIC_CAR_COUNTS = [1, 2, 3, 4] as const;
 export const MAX_PLANNED_CLASSIC_CARS = 4;
 
 export type RoadSide = (typeof ROAD_SIDES)[number];
 export type SupportedClassicCarCount = (typeof SUPPORTED_CLASSIC_CAR_COUNTS)[number];
 
 export function normalizeClassicCarCount(carCount: number | undefined): SupportedClassicCarCount {
-  return carCount === 1 ? 1 : 2;
+  if (carCount === 1 || carCount === 2 || carCount === 3 || carCount === 4) {
+    return carCount;
+  }
+
+  return 2;
 }
 
 export function getActiveRoadSides(carCount: number | undefined): RoadSide[] {

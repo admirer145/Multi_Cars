@@ -354,5 +354,6 @@ function createObstacleVarietyEvent(
 }
 
 function invertSide(side: RoadSide): RoadSide {
-  return side === "left" ? "right" : "left";
+  const sideIndex = ROAD_SIDES.indexOf(side);
+  return ROAD_SIDES[(sideIndex + 1) % ROAD_SIDES.length];
 }

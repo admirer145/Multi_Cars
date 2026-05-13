@@ -12,7 +12,7 @@ import { generatePattern } from "../patterns/patternGenerator";
 
 export const CLASSIC_MODE_ID = "classic";
 export const CLASSIC_SEED_PREFIX = "classic-v1";
-export const CLASSIC_CAR_OPTIONS = [2, 1] as const;
+export const CLASSIC_CAR_OPTIONS = [2, 1, 4, 3] as const;
 export const MIN_CLASSIC_SPEED_LEVEL = 1;
 export const MAX_CLASSIC_SPEED_LEVEL = 50;
 export const DEFAULT_CLASSIC_SPEED_SETTINGS = {
@@ -121,7 +121,7 @@ export function createClassicRunSummary(
 }
 
 export function formatClassicModeLabel(carCount: SupportedClassicCarCount): string {
-  return carCount === 1 ? "Classic 1 Car" : "Classic 2 Cars";
+  return carCount === 1 ? "Classic 1 Car" : `Classic ${carCount} Cars`;
 }
 
 export function normalizeClassicSpeedSettings(

@@ -53,18 +53,44 @@ test("does not show gameplay tuning during active runs", async ({ page }) => {
   await expect(page.getByLabel("Quick Control Room")).toHaveCount(0);
 });
 
-test("shows two-car Classic keyboard controls on desktop", async ({ page }, testInfo) => {
+test("shows Classic keyboard controls on desktop", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes("mobile"), "Keyboard guidance is desktop-only.");
 
   await page.goto("/");
 
   await page.getByRole("button", { name: /Classic Run/ }).click();
 
-  await expect(page.getByText("Two Cars Keyboard")).toBeVisible();
-  await expect(page.getByText("A for left car, L for right car, P to pause.")).toBeVisible();
-  await expect(page.getByText("Left car", { exact: true })).toBeVisible();
-  await expect(page.getByText("Right car", { exact: true })).toBeVisible();
+  await expect(page.getByText("Laptop Keyboard")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Classic 3 Cars/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Classic 4 Cars/ })).toBeVisible();
+  await expect
+    .poll(async () => page.getByRole("button", { name: /Classic/ }).evaluateAll((buttons) =>
+      buttons.map((button) => button.textContent?.match(/Classic \d Cars?/)?.[0] ?? ""),
+    ))
+    .toEqual(["Classic 2 Cars", "Classic 1 Car", "Classic 4 Cars", "Classic 3 Cars"]);
+  await expect(page.getByText("Car 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Car 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("Car 3", { exact: true })).toBeVisible();
+  await expect(page.getByText("Car 4", { exact: true })).toBeVisible();
   await expect(page.getByText("Pause", { exact: true })).toBeVisible();
+});
+
+test("starts four-car Classic on desktop with keyboard controls", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes("mobile"), "Four-car Classic is laptop/desktop coverage.");
+
+  await page.goto("/");
+
+  await startClassic(page, /4 Cars/);
+
+  await expect(page.locator("body")).toHaveAttribute("data-car-count", "4");
+  await expect(page.locator("body")).toHaveAttribute("data-third-lane", "0");
+  await expect(page.locator("body")).toHaveAttribute("data-fourth-lane", "1");
+
+  await page.keyboard.press("K");
+  await expect(page.locator("body")).toHaveAttribute("data-third-lane", "1");
+
+  await page.keyboard.press("L");
+  await expect(page.locator("body")).toHaveAttribute("data-fourth-lane", "0");
 });
 
 test("starts one-car Classic with full-screen single input", async ({ page }) => {

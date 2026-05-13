@@ -1,8 +1,9 @@
-import { COLLECTION_Y, getActiveRoadSides, normalizeClassicCarCount, SPAWN_Y } from "../constants";
+import { COLLECTION_Y, getActiveRoadSides, normalizeClassicCarCount, ROAD_SIDES, SPAWN_Y } from "../constants";
 import { getSpeedAtTime } from "../difficulty/difficultyModel";
 import { POWER_UP_DURATION_MS } from "../modifiers/gameplayModifiers";
 import type {
   ActiveObjectState,
+  CarState,
   ModeConfig,
   PatternEvent,
   RoadSide,
@@ -73,6 +74,10 @@ export class GameSimulation {
     if (input.type === "TOGGLE_RIGHT") {
       this.toggleCar("right");
     }
+
+    if (input.type === "TOGGLE_CAR") {
+      this.toggleCar(input.side);
+    }
   }
 
   step(deltaMs: number): SimulationState {
@@ -107,10 +112,7 @@ export class GameSimulation {
     return {
       timeMs: 0,
       carCount: normalizeClassicCarCount(this.config.carCount),
-      cars: {
-        left: { side: "left", lane: 0 },
-        right: { side: "right", lane: 1 },
-      },
+      cars: createInitialCars(),
       objects: [],
       score: 0,
       status: "ready",
@@ -265,4 +267,14 @@ export class GameSimulation {
     return this.state.powerUps.slowMotionUntilMs > this.state.timeMs;
   }
 
+}
+
+function createInitialCars(): Record<RoadSide, CarState> {
+  return ROAD_SIDES.reduce(
+    (cars, side, index) => ({
+      ...cars,
+      [side]: { side, lane: index % 2 },
+    }),
+    {} as Record<RoadSide, CarState>,
+  );
 }

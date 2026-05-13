@@ -580,6 +580,8 @@ function ClassicScreen({
   const optionDetails: Record<SupportedClassicCarCount, string> = {
     1: "One centered car, two lanes, and a single full-screen input.",
     2: "The original two-car, four-lane Classic pressure run.",
+    3: "A laptop-only six-lane coordination jump with three cars.",
+    4: "The full eight-lane keyboard challenge for serious chaos.",
   };
 
   return (
@@ -593,7 +595,9 @@ function ClassicScreen({
               key={carCount}
               type="button"
               onClick={() => onStart(carCount)}
-              className="group min-h-64 rounded-3xl border border-white/12 bg-panel/84 p-6 text-left shadow-2xl transition hover:-translate-y-1 hover:border-cyanline/70 hover:shadow-glow focus:outline-none focus:ring-2 focus:ring-cyanline"
+              className={`group min-h-64 rounded-3xl border border-white/12 bg-panel/84 p-6 text-left shadow-2xl transition hover:-translate-y-1 hover:border-cyanline/70 hover:shadow-glow focus:outline-none focus:ring-2 focus:ring-cyanline ${
+                carCount >= 3 ? "hidden md:block" : ""
+              }`}
             >
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-cyanline text-ink">
                 <Car />
@@ -602,10 +606,10 @@ function ClassicScreen({
               <p className="mt-3 text-base font-semibold leading-relaxed text-slate-300">
                 {optionDetails[carCount]}
               </p>
-              {carCount === 2 ? (
+              {carCount >= 2 ? (
                 <div className="mt-5 hidden rounded-2xl border border-cyanline/20 bg-cyanline/8 px-4 py-3 md:block">
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-cyanline">Desktop keys</p>
-                  <p className="mt-1 text-sm font-bold text-slate-200">A for left car, L for right car, P to pause.</p>
+                  <p className="mt-1 text-sm font-bold text-slate-200">{getClassicKeyboardHint(carCount)}</p>
                 </div>
               ) : null}
               <div className="mt-6 flex items-end justify-between gap-4">
@@ -636,13 +640,15 @@ function ClassicKeyboardGuide(): ReactElement {
             <Keyboard />
           </span>
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-cyanline">Two Cars Keyboard</p>
-            <h2 className="mt-1 text-2xl font-black leading-tight">Both hands get one job.</h2>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-cyanline">Laptop Keyboard</p>
+            <h2 className="mt-1 text-2xl font-black leading-tight">Two hands can run up to four cars.</h2>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <KeyboardAction keys={["A", "←"]} label="Left car" />
-          <KeyboardAction keys={["L", "→"]} label="Right car" />
+        <div className="grid gap-3 sm:grid-cols-5">
+          <KeyboardAction keys={["A"]} label="Car 1" />
+          <KeyboardAction keys={["S"]} label="Car 2" />
+          <KeyboardAction keys={["K"]} label="Car 3" />
+          <KeyboardAction keys={["L"]} label="Car 4" />
           <KeyboardAction keys={["P"]} label="Pause" icon={<Pause size={15} />} />
         </div>
       </div>
@@ -677,6 +683,18 @@ function KeyboardAction({
       {icon ? <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-goldline">{icon}</span> : null}
     </div>
   );
+}
+
+function getClassicKeyboardHint(carCount: SupportedClassicCarCount): string {
+  if (carCount === 2) {
+    return "A for car 1, L for car 2, P to pause.";
+  }
+
+  if (carCount === 3) {
+    return "A, S, and K control the three cars. P pauses.";
+  }
+
+  return "A, S, K, and L control all four cars. P pauses.";
 }
 
 function ChallengeScreen({
@@ -1694,7 +1712,7 @@ function drawReplayFrame(context: CanvasRenderingContext2D, frame: ReplayFrame):
       context,
       scale(laneX[side][frame.state.cars[side].lane], "x"),
       scale(COLLECTION_Y, "y"),
-      side === "right" ? "#ffd166" : "#3dd6c6",
+      getReplayCarColor(side),
     );
   }
 
@@ -1712,49 +1730,60 @@ function drawReplayRoad(
   scale: (value: number, axis: "x" | "y") => number,
   carCount: number,
 ): void {
-  if (carCount === 1) {
-    context.fillStyle = "#101827";
-    roundRect(context, scale(96, "x"), scale(94, "y"), scale(528, "x"), scale(1220, "y"), scale(16, "x"));
-    context.fill();
-    context.fillStyle = "#202938";
-    roundRect(context, scale(144, "x"), scale(100, "y"), scale(432, "x"), scale(1180, "y"), scale(12, "x"));
-    context.fill();
-  } else {
-    context.fillStyle = "#101827";
-    roundRect(context, scale(46, "x"), scale(94, "y"), scale(628, "x"), scale(1220, "y"), scale(16, "x"));
-    context.fill();
-    context.fillStyle = "#202938";
-    roundRect(context, scale(74, "x"), scale(100, "y"), scale(280, "x"), scale(1180, "y"), scale(12, "x"));
-    context.fill();
-    roundRect(context, scale(366, "x"), scale(100, "y"), scale(280, "x"), scale(1180, "y"), scale(12, "x"));
+  const laneX = getReplayLaneX(carCount);
+  const activeSides = getActiveRoadSides(carCount);
+  const xValues = activeSides.flatMap((side) => laneX[side]);
+  const minX = Math.min(...xValues) - 68;
+  const maxX = Math.max(...xValues) + 68;
+
+  context.fillStyle = "#101827";
+  roundRect(context, scale(minX, "x"), scale(94, "y"), scale(maxX - minX, "x"), scale(1220, "y"), scale(16, "x"));
+  context.fill();
+  context.fillStyle = "#202938";
+  for (const side of activeSides) {
+    const [laneA, laneB] = laneX[side];
+    const groupX = Math.min(laneA, laneB) - getReplayRoadGroupPadding(carCount);
+    const groupWidth = Math.abs(laneB - laneA) + getReplayRoadGroupPadding(carCount) * 2;
+    roundRect(context, scale(groupX, "x"), scale(100, "y"), scale(groupWidth, "x"), scale(1180, "y"), scale(12, "x"));
     context.fill();
   }
 
   context.strokeStyle = "rgba(248, 250, 252, 0.22)";
   context.lineWidth = scale(4, "x");
   context.beginPath();
-  if (carCount === 1) {
-    context.moveTo(scale(360, "x"), scale(100, "y"));
-    context.lineTo(scale(360, "x"), scale(1280, "y"));
-  } else {
-    context.moveTo(scale(214, "x"), scale(100, "y"));
-    context.lineTo(scale(214, "x"), scale(1280, "y"));
-    context.moveTo(scale(506, "x"), scale(100, "y"));
-    context.lineTo(scale(506, "x"), scale(1280, "y"));
+  for (const side of activeSides) {
+    const [laneA, laneB] = laneX[side];
+    const dividerX = (laneA + laneB) / 2;
+    context.moveTo(scale(dividerX, "x"), scale(100, "y"));
+    context.lineTo(scale(dividerX, "x"), scale(1280, "y"));
   }
   context.stroke();
 }
 
 function getReplayLaneX(carCount: number): Record<RoadSide, [number, number]> {
-  return carCount === 1
-    ? {
-        left: [252, 468],
-        right: [438, 574],
-      }
-    : {
-        left: [146, 282],
-        right: [438, 574],
-      };
+  const laneXByCarCount: Record<number, Record<RoadSide, [number, number]>> = {
+    1: { left: [252, 468], right: [438, 574], third: [438, 574], fourth: [438, 574] },
+    2: { left: [146, 282], right: [438, 574], third: [438, 574], fourth: [438, 574] },
+    3: { left: [60, 190], right: [295, 425], third: [530, 660], fourth: [530, 660] },
+    4: { left: [55, 125], right: [235, 305], third: [415, 485], fourth: [595, 665] },
+  };
+  return laneXByCarCount[carCount] ?? laneXByCarCount[2];
+}
+
+function getReplayRoadGroupPadding(carCount: number): number {
+  if (carCount === 1) return 108;
+  if (carCount === 2) return 72;
+  return 54;
+}
+
+function getReplayCarColor(side: RoadSide): string {
+  const colors: Record<RoadSide, string> = {
+    left: "#3dd6c6",
+    right: "#ffd166",
+    third: "#fb7185",
+    fourth: "#93c5fd",
+  };
+  return colors[side];
 }
 
 function drawReplayObject(
@@ -1770,7 +1799,7 @@ function drawReplayObject(
       drawReplayCollectibleToken(context, x, y, "#6ee7b7");
       break;
     case "color-match":
-      drawReplayColorMatchToken(context, x, y, object.colorKey === "right" ? "#ffd166" : "#3dd6c6");
+      drawReplayColorMatchToken(context, x, y, getReplayCarColor(object.colorKey ?? object.side));
       break;
     case "dual-collect":
       drawReplayDualCollectToken(context, x, y);

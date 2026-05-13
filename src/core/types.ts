@@ -74,6 +74,7 @@ export type FailureState = {
 export type SimulationInput =
   | { type: "TOGGLE_LEFT"; atMs: number }
   | { type: "TOGGLE_RIGHT"; atMs: number }
+  | { type: "TOGGLE_CAR"; side: RoadSide; atMs: number }
   | { type: "PAUSE"; atMs: number }
   | { type: "RESUME"; atMs: number }
   | { type: "RESTART"; atMs: number };

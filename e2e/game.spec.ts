@@ -45,6 +45,28 @@ test("starts Classic from the menu", async ({ page }) => {
   await expect(page.locator("body")).toHaveAttribute("data-car-count", "2");
 });
 
+test("does not show gameplay tuning during active runs", async ({ page }) => {
+  await page.goto("/");
+
+  await startClassic(page);
+
+  await expect(page.getByLabel("Quick Control Room")).toHaveCount(0);
+});
+
+test("shows two-car Classic keyboard controls on desktop", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes("mobile"), "Keyboard guidance is desktop-only.");
+
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Classic Run/ }).click();
+
+  await expect(page.getByText("Two Cars Keyboard")).toBeVisible();
+  await expect(page.getByText("A for left car, L for right car, P to pause.")).toBeVisible();
+  await expect(page.getByText("Left car", { exact: true })).toBeVisible();
+  await expect(page.getByText("Right car", { exact: true })).toBeVisible();
+  await expect(page.getByText("Pause", { exact: true })).toBeVisible();
+});
+
 test("starts one-car Classic with full-screen single input", async ({ page }) => {
   await page.goto("/");
 
@@ -127,6 +149,41 @@ test("routes Challenge failure to the React summary overlay", async ({ page }) =
     })
     .toBe(true);
   await expect(page.locator("canvas")).toBeVisible();
+});
+
+test("summary tuning applies to the next replay", async ({ page }) => {
+  await page.goto("/");
+
+  await startClassic(page);
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+
+  await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
+  await expect(page.getByRole("tab", { name: "Result" })).toHaveAttribute("aria-selected", "true");
+
+  await page.getByRole("tab", { name: "Tuning" }).click();
+  await expect(page.getByLabel("Tune Next Run")).toBeVisible();
+  for (let count = 0; count < 7; count += 1) {
+    await page.getByLabel("Increase summary minimum speed level").click();
+  }
+  await page.getByRole("button", { name: /Again/ }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "gameplay");
+  await expect(page.locator("body")).toHaveAttribute("data-speed-level", "12");
+});
+
+test("summary tuning opens the full Control Room", async ({ page }) => {
+  await page.goto("/");
+
+  await startClassic(page);
+  await page.evaluate(() => window.__MULTI_CARS_TEST_FAIL__?.());
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "summary", { timeout: SUMMARY_TIMEOUT_MS });
+
+  await page.getByRole("tab", { name: "Tuning" }).click();
+  await page.getByRole("button", { name: /Open Control Room/ }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-screen", "settings");
+  await expect(page.getByRole("heading", { name: "Control Room" })).toBeVisible();
 });
 
 test("summary Back returns to Challenge road selection", async ({ page }) => {

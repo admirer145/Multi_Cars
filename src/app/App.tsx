@@ -6,11 +6,13 @@ import {
   ArrowLeft,
   Gauge,
   Headphones,
+  Keyboard,
   CalendarDays,
   Award,
   Lock,
   Medal,
   Palette,
+  Pause,
   Play,
   RotateCcw,
   Settings,
@@ -24,6 +26,7 @@ import { createGameConfig, GAME_HEIGHT, GAME_WIDTH } from "./gameConfig";
 import {
   MENU_REQUEST_EVENT,
   RUN_ENDED_EVENT,
+  emitControlRoomUpdated,
   type AppScreen,
   type GameBootConfig,
   type PlayMode,
@@ -258,11 +261,21 @@ export function App(): ReactElement {
   };
 
   const handleClassicSpeedSettingsChange = (nextSettings: ClassicSpeedSettings) => {
-    setClassicSpeedSettings(saveClassicSpeedSettings(nextSettings));
+    const savedSpeedSettings = saveClassicSpeedSettings(nextSettings);
+    setClassicSpeedSettings(savedSpeedSettings);
+    emitControlRoomUpdated({
+      classicSpeedSettings: savedSpeedSettings,
+      gameplayModifierSettings,
+    });
   };
 
   const handleGameplayModifierSettingsChange = (nextSettings: GameplayModifierSettings) => {
-    setGameplayModifierSettings(saveGameplayModifierSettings(nextSettings));
+    const savedModifierSettings = saveGameplayModifierSettings(nextSettings);
+    setGameplayModifierSettings(savedModifierSettings);
+    emitControlRoomUpdated({
+      classicSpeedSettings,
+      gameplayModifierSettings: savedModifierSettings,
+    });
   };
 
   const handleCarSkinSelect = (skinId: CarSkinId) => {
@@ -334,7 +347,12 @@ export function App(): ReactElement {
       {screen === "summary" && summary ? (
         <SummaryOverlay
           detail={summary}
+          classicSpeedSettings={classicSpeedSettings}
+          onClassicSpeedSettingsChange={handleClassicSpeedSettingsChange}
+          gameplayModifierSettings={gameplayModifierSettings}
+          onGameplayModifierSettingsChange={handleGameplayModifierSettingsChange}
           onBack={returnFromSummary}
+          onOpenSettings={() => navigateToStaticScreen("settings")}
           onReplay={() =>
             startRun(
               summary.mode,
@@ -568,6 +586,7 @@ function ClassicScreen({
     <ScreenShell>
       <section className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-5 px-5 py-7 sm:px-8">
         <TopBar title="Classic Run" detail="Pick the number of cars for this run." onBack={onBack} />
+        <ClassicKeyboardGuide />
         <div className="grid flex-1 content-center gap-4 sm:grid-cols-2">
           {CLASSIC_CAR_OPTIONS.map((carCount) => (
             <button
@@ -583,6 +602,12 @@ function ClassicScreen({
               <p className="mt-3 text-base font-semibold leading-relaxed text-slate-300">
                 {optionDetails[carCount]}
               </p>
+              {carCount === 2 ? (
+                <div className="mt-5 hidden rounded-2xl border border-cyanline/20 bg-cyanline/8 px-4 py-3 md:block">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-cyanline">Desktop keys</p>
+                  <p className="mt-1 text-sm font-bold text-slate-200">A for left car, L for right car, P to pause.</p>
+                </div>
+              ) : null}
               <div className="mt-6 flex items-end justify-between gap-4">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Best</p>
@@ -599,6 +624,58 @@ function ClassicScreen({
         </div>
       </section>
     </ScreenShell>
+  );
+}
+
+function ClassicKeyboardGuide(): ReactElement {
+  return (
+    <aside className="hidden rounded-3xl border border-cyanline/24 bg-gradient-to-r from-cyanline/14 via-panel/88 to-goldline/12 p-4 shadow-glow md:block">
+      <div className="grid gap-4 lg:grid-cols-[auto_1fr] lg:items-center">
+        <div className="flex items-center gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-cyanline text-ink shadow-glow">
+            <Keyboard />
+          </span>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-cyanline">Two Cars Keyboard</p>
+            <h2 className="mt-1 text-2xl font-black leading-tight">Both hands get one job.</h2>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <KeyboardAction keys={["A", "←"]} label="Left car" />
+          <KeyboardAction keys={["L", "→"]} label="Right car" />
+          <KeyboardAction keys={["P"]} label="Pause" icon={<Pause size={15} />} />
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function KeyboardAction({
+  keys,
+  label,
+  icon,
+}: {
+  keys: string[];
+  label: string;
+  icon?: ReactNode;
+}): ReactElement {
+  return (
+    <div className="flex min-h-20 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-ink/52 px-4 py-3">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{label}</p>
+        <div className="mt-2 flex gap-2">
+          {keys.map((key) => (
+            <span
+              key={key}
+              className="grid h-9 min-w-9 place-items-center rounded-xl border border-white/18 bg-white/10 px-3 text-sm font-black text-slate-50 shadow-inner"
+            >
+              {key}
+            </span>
+          ))}
+        </div>
+      </div>
+      {icon ? <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-goldline">{icon}</span> : null}
+    </div>
   );
 }
 
@@ -908,16 +985,49 @@ function SettingsScreen({
   );
 }
 
+function QuickToggle({
+  label,
+  active,
+  onChange,
+}: {
+  label: string;
+  active: boolean;
+  onChange: () => void;
+}): ReactElement {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/6 px-3 py-3">
+      <span className="text-sm font-black text-slate-100">{label}</span>
+      <input
+        type="checkbox"
+        checked={active}
+        onChange={onChange}
+        className="h-5 w-5 accent-cyanline"
+      />
+    </label>
+  );
+}
+
 function SummaryOverlay({
   detail,
+  classicSpeedSettings,
+  onClassicSpeedSettingsChange,
+  gameplayModifierSettings,
+  onGameplayModifierSettingsChange,
   onBack,
+  onOpenSettings,
   onReplay,
 }: {
   detail: RunEndedDetail;
+  classicSpeedSettings: ClassicSpeedSettings;
+  onClassicSpeedSettingsChange: (settings: ClassicSpeedSettings) => void;
+  gameplayModifierSettings: GameplayModifierSettings;
+  onGameplayModifierSettingsChange: (settings: GameplayModifierSettings) => void;
   onBack: () => void;
+  onOpenSettings: () => void;
   onReplay: () => void;
 }): ReactElement {
   const { summary } = detail;
+  const [activeTab, setActiveTab] = useState<"result" | "tune">("result");
   const [showReplay, setShowReplay] = useState(false);
   const backLabel = summary.modeId === "classic" || summary.modeId === "challenge" || summary.modeId === "practice" ? "Back" : "Menu";
   const canReplayMistake = summary.result === "failed" && Boolean(detail.replay?.frames.length && detail.replay.frames.length > 1);
@@ -930,6 +1040,10 @@ function SummaryOverlay({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (isFormControl(event.target)) {
+        return;
+      }
+
       if (event.key === "r" || event.key === "R" || event.key === "Enter") {
         event.preventDefault();
         onReplay();
@@ -946,57 +1060,94 @@ function SummaryOverlay({
   }, [onBack, onReplay]);
 
   return (
-    <div className="fixed inset-0 z-20 grid place-items-center bg-ink/55 px-5 backdrop-blur-sm">
-      <section className="w-full max-w-md rounded-[2rem] border border-white/15 bg-panel/92 p-6 text-center shadow-2xl">
-        <p className="text-sm font-black uppercase tracking-[0.26em] text-dangerline">
-          {summary.result === "completed"
-            ? summary.modeId === "practice"
-              ? "Drill Complete"
-              : summary.modeId === "daily"
-                ? "Daily Cleared"
-                : "Road Cleared"
-            : "Run Ended"}
-        </p>
-        <h2 className="mt-3 text-4xl font-black">{summary.modeLabel}</h2>
-        <p className="mt-2 text-slate-300">
-          {formatFailure(summary.failureReason)}
-          {summary.failedPatternFamily ? ` - ${summary.failedPatternFamily}` : ""}
-        </p>
-
-        {detail.unlockedAchievementIds?.length ? (
-          <div className="mt-5 rounded-2xl border border-goldline/30 bg-goldline/10 px-4 py-3 text-left">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-goldline">Unlocked</p>
-            <div className="mt-2 space-y-1">
-              {detail.unlockedAchievementIds.map((achievementId) => {
-                const achievement = getAchievement(achievementId);
-                return (
-                  <p key={achievementId} className="text-sm font-bold text-slate-100">
-                    {achievement.title}
-                    {achievement.rewardSkinId ? ` - ${getCarSkinLabel(achievement.rewardSkinId)}` : ""}
-                  </p>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="mt-6 grid grid-cols-3 gap-3">
-          <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? "Progress" : "Score"} value={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? `${summary.completedPercent}%` : summary.score} />
-          <ScoreTile label={summary.modeId === "practice" ? "Best" : summary.modeId === "daily" ? "Best" : "Best"} value={summary.modeId === "challenge" || summary.modeId === "practice" ? `${summary.bestScore}%` : summary.bestScore} />
-          <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "daily" ? "Stars" : summary.modeId === "practice" ? "Drill" : "Speed"} value={summary.modeId === "challenge" || summary.modeId === "daily" ? `${summary.stars ?? 0}/3` : summary.modeId === "practice" ? "Local" : summary.speedLevel} />
-        </div>
-
-        {canReplayMistake ? (
+    <div className="fixed inset-0 z-20 grid place-items-center overflow-y-auto bg-ink/55 px-5 py-6 backdrop-blur-sm">
+      <section className="w-full max-w-md rounded-[2rem] border border-white/15 bg-panel/92 p-5 text-center shadow-2xl sm:p-6">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-ink/44 p-1" role="tablist" aria-label="Run summary views">
           <button
             type="button"
-            onClick={() => setShowReplay(true)}
-            className="mt-5 w-full rounded-2xl border border-goldline/35 bg-goldline/12 px-4 py-4 font-black text-goldline"
+            role="tab"
+            aria-selected={activeTab === "result"}
+            onClick={() => setActiveTab("result")}
+            className={`rounded-xl px-4 py-3 text-sm font-black transition ${
+              activeTab === "result" ? "bg-cyanline text-ink shadow-glow" : "text-slate-300 hover:bg-white/8"
+            }`}
           >
-            Replay Mistake
+            Result
           </button>
-        ) : null}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "tune"}
+            onClick={() => setActiveTab("tune")}
+            className={`rounded-xl px-4 py-3 text-sm font-black transition ${
+              activeTab === "tune" ? "bg-cyanline text-ink shadow-glow" : "text-slate-300 hover:bg-white/8"
+            }`}
+          >
+            Tuning
+          </button>
+        </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        {activeTab === "result" ? (
+          <div role="tabpanel" aria-label="Result" className="mt-5">
+          <p className="text-sm font-black uppercase tracking-[0.26em] text-dangerline">
+            {summary.result === "completed"
+              ? summary.modeId === "practice"
+                ? "Drill Complete"
+                : summary.modeId === "daily"
+                  ? "Daily Cleared"
+                  : "Road Cleared"
+              : "Run Ended"}
+          </p>
+          <h2 className="mt-3 text-4xl font-black">{summary.modeLabel}</h2>
+          <p className="mt-2 text-slate-300">
+            {formatFailure(summary.failureReason)}
+            {summary.failedPatternFamily ? ` - ${summary.failedPatternFamily}` : ""}
+          </p>
+
+          {detail.unlockedAchievementIds?.length ? (
+            <div className="mt-5 rounded-2xl border border-goldline/30 bg-goldline/10 px-4 py-3 text-left">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-goldline">Unlocked</p>
+              <div className="mt-2 space-y-1">
+                {detail.unlockedAchievementIds.map((achievementId) => {
+                  const achievement = getAchievement(achievementId);
+                  return (
+                    <p key={achievementId} className="text-sm font-bold text-slate-100">
+                      {achievement.title}
+                      {achievement.rewardSkinId ? ` - ${getCarSkinLabel(achievement.rewardSkinId)}` : ""}
+                    </p>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-6 grid grid-cols-3 gap-3">
+            <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? "Progress" : "Score"} value={summary.modeId === "challenge" || summary.modeId === "practice" || summary.modeId === "daily" ? `${summary.completedPercent}%` : summary.score} />
+            <ScoreTile label={summary.modeId === "practice" ? "Best" : summary.modeId === "daily" ? "Best" : "Best"} value={summary.modeId === "challenge" || summary.modeId === "practice" ? `${summary.bestScore}%` : summary.bestScore} />
+            <ScoreTile label={summary.modeId === "challenge" || summary.modeId === "daily" ? "Stars" : summary.modeId === "practice" ? "Drill" : "Speed"} value={summary.modeId === "challenge" || summary.modeId === "daily" ? `${summary.stars ?? 0}/3` : summary.modeId === "practice" ? "Local" : summary.speedLevel} />
+          </div>
+
+          {canReplayMistake ? (
+            <button
+              type="button"
+              onClick={() => setShowReplay(true)}
+              className="mt-5 w-full rounded-2xl border border-goldline/35 bg-goldline/12 px-4 py-4 font-black text-goldline"
+            >
+              Replay Mistake
+            </button>
+          ) : null}
+          </div>
+        ) : (
+          <TuneNextRunPanel
+            classicSpeedSettings={classicSpeedSettings}
+            onClassicSpeedSettingsChange={onClassicSpeedSettingsChange}
+            gameplayModifierSettings={gameplayModifierSettings}
+            onGameplayModifierSettingsChange={onGameplayModifierSettingsChange}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <button type="button" onClick={onBack} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4 font-black text-slate-100">
             {backLabel}
           </button>
@@ -1012,6 +1163,163 @@ function SummaryOverlay({
           onClose={() => setShowReplay(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+function TuneNextRunPanel({
+  classicSpeedSettings,
+  onClassicSpeedSettingsChange,
+  gameplayModifierSettings,
+  onGameplayModifierSettingsChange,
+  onOpenSettings,
+}: {
+  classicSpeedSettings: ClassicSpeedSettings;
+  onClassicSpeedSettingsChange: (settings: ClassicSpeedSettings) => void;
+  gameplayModifierSettings: GameplayModifierSettings;
+  onGameplayModifierSettingsChange: (settings: GameplayModifierSettings) => void;
+  onOpenSettings: () => void;
+}): ReactElement {
+  const updateMinLevel = (minLevel: number) => {
+    onClassicSpeedSettingsChange({
+      minLevel,
+      maxLevel: Math.max(minLevel, classicSpeedSettings.maxLevel),
+    });
+  };
+
+  const updateMaxLevel = (maxLevel: number) => {
+    onClassicSpeedSettingsChange({
+      minLevel: Math.min(classicSpeedSettings.minLevel, maxLevel),
+      maxLevel,
+    });
+  };
+
+  const handlePowerUpToggle = (id: PowerUpId) => {
+    onGameplayModifierSettingsChange({
+      ...gameplayModifierSettings,
+      powerUps: {
+        ...gameplayModifierSettings.powerUps,
+        [id]: !gameplayModifierSettings.powerUps[id],
+      },
+    });
+  };
+
+  const handleObstacleVarietyToggle = (id: ObstacleVarietyId) => {
+    onGameplayModifierSettingsChange({
+      ...gameplayModifierSettings,
+      obstacleVariety: {
+        ...gameplayModifierSettings.obstacleVariety,
+        [id]: !gameplayModifierSettings.obstacleVariety[id],
+      },
+    });
+  };
+
+  return (
+    <div role="tabpanel" aria-label="Tune Next Run" className="mt-5 text-left">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-cyanline">Tune Next Run</p>
+          <h3 className="mt-1 text-2xl font-black text-slate-50">Adjust, then replay.</h3>
+        </div>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-cyanline text-ink">
+          <Settings size={20} />
+        </span>
+      </div>
+
+      <p className="mt-3 text-xs font-bold leading-relaxed text-slate-300">
+        These settings are saved before you hit Again.
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <SpeedLevelStepper
+          label="Start"
+          value={classicSpeedSettings.minLevel}
+          decrementLabel="Decrease summary minimum speed level"
+          incrementLabel="Increase summary minimum speed level"
+          onChange={updateMinLevel}
+        />
+        <SpeedLevelStepper
+          label="Cap"
+          value={classicSpeedSettings.maxLevel}
+          decrementLabel="Decrease summary maximum speed level"
+          incrementLabel="Increase summary maximum speed level"
+          onChange={updateMaxLevel}
+        />
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <QuickToggle
+          label="Shield"
+          active={gameplayModifierSettings.powerUps.shield}
+          onChange={() => handlePowerUpToggle("shield")}
+        />
+        <QuickToggle
+          label="Slow Motion"
+          active={gameplayModifierSettings.powerUps["slow-motion"]}
+          onChange={() => handlePowerUpToggle("slow-motion")}
+        />
+        <QuickToggle
+          label="Moving Obstacles"
+          active={gameplayModifierSettings.obstacleVariety["moving-obstacles"]}
+          onChange={() => handleObstacleVarietyToggle("moving-obstacles")}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={onOpenSettings}
+        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/8 px-4 py-3 text-sm font-black text-slate-100 transition hover:border-cyanline/50 hover:bg-cyanline/10"
+      >
+        <Settings size={18} /> Open Control Room
+      </button>
+    </div>
+  );
+}
+
+function SpeedLevelStepper({
+  label,
+  value,
+  decrementLabel,
+  incrementLabel,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  decrementLabel: string;
+  incrementLabel: string;
+  onChange: (value: number) => void;
+}): ReactElement {
+  const canDecrease = value > MIN_CLASSIC_SPEED_LEVEL;
+  const canIncrease = value < MAX_CLASSIC_SPEED_LEVEL;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/6 px-3 py-3">
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{label}</p>
+      <div className="mt-3 grid grid-cols-[2.4rem_1fr_2.4rem] items-center gap-2">
+        <button
+          type="button"
+          aria-label={decrementLabel}
+          disabled={!canDecrease}
+          onClick={() => onChange(value - 1)}
+          className="grid h-10 place-items-center rounded-xl border border-white/10 bg-ink/76 text-xl font-black text-slate-100 transition hover:border-cyanline/50 disabled:cursor-not-allowed disabled:opacity-35"
+        >
+          -
+        </button>
+        <span
+          aria-label={`${label} speed level`}
+          className="grid h-10 place-items-center rounded-xl border border-cyanline/20 bg-cyanline/10 text-lg font-black text-cyanline"
+        >
+          {value}
+        </span>
+        <button
+          type="button"
+          aria-label={incrementLabel}
+          disabled={!canIncrease}
+          onClick={() => onChange(value + 1)}
+          className="grid h-10 place-items-center rounded-xl border border-white/10 bg-ink/76 text-xl font-black text-slate-100 transition hover:border-cyanline/50 disabled:cursor-not-allowed disabled:opacity-35"
+        >
+          +
+        </button>
+      </div>
     </div>
   );
 }
@@ -1891,6 +2199,15 @@ function parseAppHistoryState(state: unknown): AppHistoryState | null {
   }
 
   return candidate as AppHistoryState;
+}
+
+function isFormControl(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLButtonElement
+  );
 }
 
 function getThemeGlow(theme: AuthoredTrack["roadTheme"] | PracticeDrill["roadTheme"]): string {

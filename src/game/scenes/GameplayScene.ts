@@ -1,6 +1,11 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../../app/gameConfig";
-import { emitMenuRequested, emitRunEnded } from "../../app/gameBridge";
+import {
+  CONTROL_ROOM_UPDATED_EVENT,
+  emitMenuRequested,
+  emitRunEnded,
+  type ControlRoomUpdatedDetail,
+} from "../../app/gameBridge";
 import {
   COLLECTION_Y,
   getActiveRoadSides,
@@ -178,6 +183,7 @@ export class GameplayScene extends Phaser.Scene {
       .setDepth(2);
 
     this.bindInput();
+    this.bindControlRoomUpdates();
     this.bindTestControls();
     this.setDomStatus(this.simulation.getState());
   }
@@ -224,6 +230,23 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-P", () => this.togglePause());
     this.input.keyboard?.on("keydown-ESC", () => this.togglePause());
     this.input.keyboard?.on("keydown-M", () => this.goToMenu());
+  }
+
+  private bindControlRoomUpdates(): void {
+    const handleControlRoomUpdated = (event: WindowEventMap[typeof CONTROL_ROOM_UPDATED_EVENT]) => {
+      this.applyControlRoomUpdate(event.detail);
+    };
+
+    window.addEventListener(CONTROL_ROOM_UPDATED_EVENT, handleControlRoomUpdated);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener(CONTROL_ROOM_UPDATED_EVENT, handleControlRoomUpdated);
+    });
+  }
+
+  private applyControlRoomUpdate(detail: ControlRoomUpdatedDetail): void {
+    this.modeConfig.speedLevelMin = detail.classicSpeedSettings.minLevel;
+    this.modeConfig.speedLevelMax = detail.classicSpeedSettings.maxLevel;
+    this.modeConfig.modifierSettings = detail.gameplayModifierSettings;
   }
 
   private bindTestControls(): void {

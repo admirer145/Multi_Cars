@@ -24,6 +24,11 @@ import {
 } from "lucide-react";
 import { createGameConfig, GAME_HEIGHT, GAME_WIDTH } from "./gameConfig";
 import {
+  playUiClick,
+  playUiToggle,
+  unlockAudio,
+} from "./audio";
+import {
   MENU_REQUEST_EVENT,
   RUN_ENDED_EVENT,
   emitControlRoomUpdated,
@@ -67,8 +72,10 @@ import {
   type PowerUpId,
 } from "../core/modifiers/gameplayModifiers";
 import type { ReplayClip, ReplayFrame } from "../core/replay/replayBuffer";
+import type { AudioSettings } from "../core/audio/audioSettings";
 import type { ActiveObjectState, RoadSide } from "../core/types";
 import {
+  loadAudioSettings,
   loadChallengeProgress,
   loadClassicHighScore,
   loadClassicHighScoreForCarCount,
@@ -79,6 +86,7 @@ import {
   loadPracticeProgress,
   loadSelectedCarSkin,
   saveAchievementState,
+  saveAudioSettings,
   saveClassicSpeedSettings,
   saveGameplayModifierSettings,
   saveSelectedCarSkin,
@@ -119,6 +127,7 @@ export function App(): ReactElement {
   const [gameplayModifierSettings, setGameplayModifierSettings] = useState<GameplayModifierSettings>(() =>
     loadGameplayModifierSettings(),
   );
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>(() => loadAudioSettings());
   const [achievementState, setAchievementState] = useState<AchievementState>(() => loadAchievementState());
   const [selectedCarSkinId, setSelectedCarSkinId] = useState<CarSkinId>(() => loadSelectedCarSkin());
 
@@ -278,6 +287,13 @@ export function App(): ReactElement {
     });
   };
 
+  const handleAudioSettingsChange = (nextSettings: AudioSettings) => {
+    unlockAudio();
+    const savedAudioSettings = saveAudioSettings(nextSettings);
+    setAudioSettings(savedAudioSettings);
+    playUiToggle(savedAudioSettings.soundEffects);
+  };
+
   const handleCarSkinSelect = (skinId: CarSkinId) => {
     setSelectedCarSkinId(saveSelectedCarSkin(skinId, achievementState));
   };
@@ -341,6 +357,8 @@ export function App(): ReactElement {
           onClassicSpeedSettingsChange={handleClassicSpeedSettingsChange}
           gameplayModifierSettings={gameplayModifierSettings}
           onGameplayModifierSettingsChange={handleGameplayModifierSettingsChange}
+          audioSettings={audioSettings}
+          onAudioSettingsChange={handleAudioSettingsChange}
         />
       ) : null}
 
@@ -594,7 +612,11 @@ function ClassicScreen({
             <button
               key={carCount}
               type="button"
-              onClick={() => onStart(carCount)}
+              onClick={() => {
+                unlockAudio();
+                playUiClick();
+                onStart(carCount);
+              }}
               className={`group min-h-64 rounded-3xl border border-white/12 bg-panel/84 p-6 text-left shadow-2xl transition hover:-translate-y-1 hover:border-cyanline/70 hover:shadow-glow focus:outline-none focus:ring-2 focus:ring-cyanline ${
                 carCount >= 3 ? "hidden md:block" : ""
               }`}
@@ -879,12 +901,16 @@ function SettingsScreen({
   onClassicSpeedSettingsChange,
   gameplayModifierSettings,
   onGameplayModifierSettingsChange,
+  audioSettings,
+  onAudioSettingsChange,
 }: {
   onBack: () => void;
   classicSpeedSettings: ClassicSpeedSettings;
   onClassicSpeedSettingsChange: (settings: ClassicSpeedSettings) => void;
   gameplayModifierSettings: GameplayModifierSettings;
   onGameplayModifierSettingsChange: (settings: GameplayModifierSettings) => void;
+  audioSettings: AudioSettings;
+  onAudioSettingsChange: (settings: AudioSettings) => void;
 }): ReactElement {
   const handleMinLevelChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const minLevel = Number.parseInt(event.target.value, 10);
@@ -995,7 +1021,10 @@ function SettingsScreen({
             onToggle={(id) => handleObstacleVarietyToggle(id as ObstacleVarietyId)}
           />
           <SettingsPanel icon={<Shield />} title="Comfort" rows={["Reduced motion: off", "Contrast: high", "Screen shake: low"]} />
-          <SettingsPanel icon={<Headphones />} title="Audio" rows={["Sound effects: on", "Music: off", "Haptics: planned"]} />
+          <AudioPanel
+            audioSettings={audioSettings}
+            onAudioSettingsChange={onAudioSettingsChange}
+          />
           <SettingsPanel icon={<Sparkles />} title="Visuals & Data" rows={["Theme: road based", "Save data: local", "Cloud sync: later"]} />
         </div>
       </section>
@@ -1018,7 +1047,11 @@ function QuickToggle({
       <input
         type="checkbox"
         checked={active}
-        onChange={onChange}
+        onChange={() => {
+          unlockAudio();
+          playUiClick();
+          onChange();
+        }}
         className="h-5 w-5 accent-cyanline"
       />
     </label>
@@ -1085,7 +1118,10 @@ function SummaryOverlay({
             type="button"
             role="tab"
             aria-selected={activeTab === "result"}
-            onClick={() => setActiveTab("result")}
+            onClick={() => {
+              playUiClick();
+              setActiveTab("result");
+            }}
             className={`rounded-xl px-4 py-3 text-sm font-black transition ${
               activeTab === "result" ? "bg-cyanline text-ink shadow-glow" : "text-slate-300 hover:bg-white/8"
             }`}
@@ -1096,7 +1132,10 @@ function SummaryOverlay({
             type="button"
             role="tab"
             aria-selected={activeTab === "tune"}
-            onClick={() => setActiveTab("tune")}
+            onClick={() => {
+              playUiClick();
+              setActiveTab("tune");
+            }}
             className={`rounded-xl px-4 py-3 text-sm font-black transition ${
               activeTab === "tune" ? "bg-cyanline text-ink shadow-glow" : "text-slate-300 hover:bg-white/8"
             }`}
@@ -1166,10 +1205,10 @@ function SummaryOverlay({
         )}
 
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <button type="button" onClick={onBack} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4 font-black text-slate-100">
+          <button type="button" onClick={() => { playUiClick(); onBack(); }} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4 font-black text-slate-100">
             {backLabel}
           </button>
-          <button type="button" onClick={onReplay} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyanline px-4 py-4 font-black text-ink shadow-glow">
+          <button type="button" onClick={() => { unlockAudio(); playUiClick(); onReplay(); }} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyanline px-4 py-4 font-black text-ink shadow-glow">
             <RotateCcw size={18} /> Again
           </button>
         </div>
@@ -1284,7 +1323,10 @@ function TuneNextRunPanel({
       </div>
       <button
         type="button"
-        onClick={onOpenSettings}
+        onClick={() => {
+          playUiClick();
+          onOpenSettings();
+        }}
         className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/8 px-4 py-3 text-sm font-black text-slate-100 transition hover:border-cyanline/50 hover:bg-cyanline/10"
       >
         <Settings size={18} /> Open Control Room
@@ -1317,7 +1359,10 @@ function SpeedLevelStepper({
           type="button"
           aria-label={decrementLabel}
           disabled={!canDecrease}
-          onClick={() => onChange(value - 1)}
+          onClick={() => {
+            playUiClick();
+            onChange(value - 1);
+          }}
           className="grid h-10 place-items-center rounded-xl border border-white/10 bg-ink/76 text-xl font-black text-slate-100 transition hover:border-cyanline/50 disabled:cursor-not-allowed disabled:opacity-35"
         >
           -
@@ -1332,7 +1377,10 @@ function SpeedLevelStepper({
           type="button"
           aria-label={incrementLabel}
           disabled={!canIncrease}
-          onClick={() => onChange(value + 1)}
+          onClick={() => {
+            playUiClick();
+            onChange(value + 1);
+          }}
           className="grid h-10 place-items-center rounded-xl border border-white/10 bg-ink/76 text-xl font-black text-slate-100 transition hover:border-cyanline/50 disabled:cursor-not-allowed disabled:opacity-35"
         >
           +
@@ -1449,7 +1497,11 @@ function ModeButton({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        unlockAudio();
+        playUiClick();
+        onClick();
+      }}
       className={`group flex w-full items-center gap-4 rounded-3xl border bg-panel/82 p-4 text-left backdrop-blur transition hover:-translate-y-0.5 hover:bg-panel ${color}`}
     >
       <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl ${iconBg}`}>{icon}</span>
@@ -1639,6 +1691,47 @@ function SettingsPanel({ icon, title, rows }: { icon: ReactElement; title: strin
   );
 }
 
+function AudioPanel({
+  audioSettings,
+  onAudioSettingsChange,
+}: {
+  audioSettings: AudioSettings;
+  onAudioSettingsChange: (settings: AudioSettings) => void;
+}): ReactElement {
+  const handleToggle = (key: keyof AudioSettings) => {
+    onAudioSettingsChange({
+      ...audioSettings,
+      [key]: !audioSettings[key],
+    });
+  };
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-panel/84 p-5 shadow-2xl">
+      <div className="flex items-center gap-3">
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyanline text-ink">
+          <Headphones />
+        </span>
+        <h3 className="text-2xl font-black">Audio</h3>
+      </div>
+      <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-300">
+        Crisp feedback for lane switches, pickups, power-ups, pause, and crashes. Music is a light pulse for players who want extra tension.
+      </p>
+      <div className="mt-5 space-y-3">
+        <QuickToggle
+          label="Sound Effects"
+          active={audioSettings.soundEffects}
+          onChange={() => handleToggle("soundEffects")}
+        />
+        <QuickToggle
+          label="Music Pulse"
+          active={audioSettings.music}
+          onChange={() => handleToggle("music")}
+        />
+      </div>
+    </section>
+  );
+}
+
 function TopBar({
   title,
   detail,
@@ -1650,7 +1743,7 @@ function TopBar({
 }): ReactElement {
   return (
     <header className="flex items-start gap-4">
-      <button type="button" onClick={onBack} className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/8">
+      <button type="button" onClick={() => { playUiClick(); onBack(); }} className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/8">
         <ArrowLeft />
       </button>
       <div>

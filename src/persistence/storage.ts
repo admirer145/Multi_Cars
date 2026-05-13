@@ -1,6 +1,10 @@
 import type { ChallengeProgress } from "../core/modes/challengeMode";
 import type { SupportedClassicCarCount } from "../core/constants";
 import {
+  normalizeAudioSettings,
+  type AudioSettings,
+} from "../core/audio/audioSettings";
+import {
   createInitialAchievementState,
   normalizeCarSkinId,
   type AchievementState,
@@ -23,6 +27,7 @@ const CLASSIC_SPEED_SETTINGS_KEY = "multi-cars:classic-speed-settings:v1";
 const GAMEPLAY_MODIFIER_SETTINGS_KEY = "multi-cars:gameplay-modifier-settings:v1";
 const ACHIEVEMENTS_KEY = "multi-cars:achievements:v1";
 const SELECTED_CAR_SKIN_KEY = "multi-cars:selected-car-skin:v1";
+const AUDIO_SETTINGS_KEY = "multi-cars:audio-settings:v1";
 const CHALLENGE_PROGRESS_PREFIX = "multi-cars:challenge-progress:v1:";
 const DAILY_PROGRESS_PREFIX = "multi-cars:daily-progress:v1:";
 const PRACTICE_PROGRESS_PREFIX = "multi-cars:practice-progress:v1:";
@@ -240,6 +245,31 @@ export function saveSelectedCarSkin(
 ): CarSkinId {
   const normalized = normalizeCarSkinId(skinId, achievementState);
   storage.setItem(SELECTED_CAR_SKIN_KEY, normalized);
+  return normalized;
+}
+
+export function loadAudioSettings(
+  storage: StorageLike = getBrowserStorage(),
+): AudioSettings {
+  const value = storage.getItem(AUDIO_SETTINGS_KEY);
+
+  if (!value) {
+    return normalizeAudioSettings();
+  }
+
+  try {
+    return normalizeAudioSettings(JSON.parse(value));
+  } catch {
+    return normalizeAudioSettings();
+  }
+}
+
+export function saveAudioSettings(
+  settings: Partial<AudioSettings>,
+  storage: StorageLike = getBrowserStorage(),
+): AudioSettings {
+  const normalized = normalizeAudioSettings(settings);
+  storage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(normalized));
   return normalized;
 }
 

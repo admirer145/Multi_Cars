@@ -301,8 +301,25 @@ test("opens and closes settings from the menu", async ({ page }) => {
 
   await page.getByRole("button", { name: /Control Room/ }).click();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "settings");
+  await expect(page.getByRole("heading", { name: "Audio" })).toBeVisible();
+  await expect(page.getByLabel("Sound Effects")).toBeChecked();
+  await expect(page.getByLabel("Music Pulse")).not.toBeChecked();
   await page.getByRole("button").first().click();
   await expect(page.locator("body")).toHaveAttribute("data-screen", "menu");
+});
+
+test("audio settings persist from Control Room", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Control Room/ }).click();
+  await page.getByLabel("Music Pulse").check();
+  await page.getByLabel("Sound Effects").uncheck();
+
+  await page.reload();
+  await page.getByRole("button", { name: /Control Room/ }).click();
+
+  await expect(page.getByLabel("Music Pulse")).toBeChecked();
+  await expect(page.getByLabel("Sound Effects")).not.toBeChecked();
 });
 
 test("opens Garage with achievements and cosmetic skins", async ({ page }) => {

@@ -7,6 +7,19 @@ import {
   type ControlRoomUpdatedDetail,
 } from "../../app/gameBridge";
 import {
+  playCollectible,
+  playFailure,
+  playLaneSwitch,
+  playPauseSound,
+  playPowerUp,
+  playRunStart,
+  playShieldHit,
+  setMusicIntensity,
+  startMusic,
+  stopMusic,
+  unlockAudio,
+} from "../../app/audio";
+import {
   COLLECTION_Y,
   getActiveRoadSides,
   normalizeClassicCarCount,
@@ -132,6 +145,13 @@ type GameplaySceneData = {
   carCount?: SupportedClassicCarCount;
 };
 
+type AudioSnapshot = {
+  score: number;
+  shieldCharges: number;
+  status: SimulationState["status"];
+  collectedObjectIds: Set<string>;
+};
+
 function createInitialVisualCarPose(
   laneX: Record<RoadSide, [number, number]>,
   state?: SimulationState,
@@ -156,6 +176,19 @@ function createVisualCarPose(x: number, lane: number): VisualCarPose {
     lane,
     animationStartedAtMs: 0,
     durationMs: LOW_SPEED_LANE_SWITCH_MS,
+  };
+}
+
+function createAudioSnapshot(state: SimulationState): AudioSnapshot {
+  return {
+    score: state.score,
+    shieldCharges: state.powerUps.shieldCharges,
+    status: state.status,
+    collectedObjectIds: new Set(
+      state.objects
+        .filter((object) => object.collected)
+        .map((object) => object.id),
+    ),
   };
 }
 
@@ -216,6 +249,7 @@ export class GameplayScene extends Phaser.Scene {
   private lastStatus: SimulationState["status"] = "ready";
   private lastFrameDeltaMs = 16;
   private hasDispatchedEnd = false;
+  private audioSnapshot?: AudioSnapshot;
   private carColors: Record<RoadSide, number> = { ...CAR_COLORS };
   private visualCarPose: Record<RoadSide, VisualCarPose> = createInitialVisualCarPose(LANE_X_BY_CAR_COUNT[2]);
 
@@ -272,6 +306,8 @@ export class GameplayScene extends Phaser.Scene {
     const cappedDelta = Math.min(delta, 34);
     this.lastFrameDeltaMs = cappedDelta;
     const state = this.simulation.step(cappedDelta);
+    setMusicIntensity(this.getDisplayedSpeedLevel(state));
+    this.playAudioForState(state);
     this.replayBuffer.record(state);
 
     if (
@@ -322,6 +358,7 @@ export class GameplayScene extends Phaser.Scene {
     window.addEventListener(CONTROL_ROOM_UPDATED_EVENT, handleControlRoomUpdated);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       window.removeEventListener(CONTROL_ROOM_UPDATED_EVENT, handleControlRoomUpdated);
+      stopMusic();
     });
   }
 
@@ -329,6 +366,40 @@ export class GameplayScene extends Phaser.Scene {
     this.modeConfig.speedLevelMin = detail.classicSpeedSettings.minLevel;
     this.modeConfig.speedLevelMax = detail.classicSpeedSettings.maxLevel;
     this.modeConfig.modifierSettings = detail.gameplayModifierSettings;
+  }
+
+  private playAudioForState(state: SimulationState): void {
+    const previous = this.audioSnapshot;
+    if (!previous) {
+      this.audioSnapshot = createAudioSnapshot(state);
+      return;
+    }
+
+    for (const object of state.objects) {
+      if (!object.collected || previous.collectedObjectIds.has(object.id)) {
+        continue;
+      }
+
+      if (object.kind === "power-up") {
+        playPowerUp();
+      } else {
+        playCollectible();
+      }
+    }
+
+    if (state.powerUps.shieldCharges < previous.shieldCharges) {
+      playShieldHit();
+    }
+
+    if (state.status === "failed" && previous.status !== "failed") {
+      playFailure();
+    }
+
+    if (state.status === "completed" && previous.status !== "completed") {
+      stopMusic();
+    }
+
+    this.audioSnapshot = createAudioSnapshot(state);
   }
 
   private bindTestControls(): void {
@@ -383,14 +454,19 @@ export class GameplayScene extends Phaser.Scene {
     const side = activeSides[Phaser.Math.Clamp(index, 0, activeSides.length - 1)];
     const state = this.simulation.getState();
     this.simulation.applyInput({ type: "TOGGLE_CAR", side, atMs: state.timeMs });
+    playLaneSwitch(side);
   }
 
   private togglePause(): void {
     const state = this.simulation.getState();
     if (state.status === "running") {
       this.simulation.applyInput({ type: "PAUSE", atMs: state.timeMs });
+      playPauseSound(true);
+      stopMusic();
     } else if (state.status === "paused") {
       this.simulation.applyInput({ type: "RESUME", atMs: state.timeMs });
+      playPauseSound(false);
+      startMusic();
     }
   }
 
@@ -468,6 +544,10 @@ export class GameplayScene extends Phaser.Scene {
     const initialState = this.simulation.getState();
     const laneX = this.getLaneX(initialState.carCount);
     this.visualCarPose = createInitialVisualCarPose(laneX, initialState);
+    this.audioSnapshot = createAudioSnapshot(initialState);
+    unlockAudio();
+    playRunStart(this.carCount);
+    startMusic();
     this.lastStatus = "ready";
     this.hasDispatchedEnd = false;
   }
@@ -1113,7 +1193,9 @@ export class GameplayScene extends Phaser.Scene {
     const carIndex = state.carCount === 1
       ? 0
       : Phaser.Math.Clamp(Math.floor(pointer.x / (GAME_WIDTH / activeSides.length)), 0, activeSides.length - 1);
-    this.simulation.applyInput({ type: "TOGGLE_CAR", side: activeSides[carIndex], atMs: state.timeMs });
+    const side = activeSides[carIndex];
+    this.simulation.applyInput({ type: "TOGGLE_CAR", side, atMs: state.timeMs });
+    playLaneSwitch(side);
   }
 
   private getDisplayedSpeedLevel(state: SimulationState): number {
@@ -1126,6 +1208,7 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.hasDispatchedEnd = true;
+    stopMusic();
     const replay = this.replayBuffer.createClip(state);
 
     if (this.activeMode === "challenge" && this.challengeRun && this.challengeProgress) {
